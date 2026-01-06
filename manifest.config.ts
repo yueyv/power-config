@@ -34,11 +34,8 @@ export default defineManifest({
     'storage',
     'webRequest',
     'alarms',
-    'webRequestBlocking',
   ],
-  side_panel: {
-    default_path: 'src/sidepanel/index.html',
-  },
+
   background: {
     service_worker: 'src/background/main.ts',
     type: 'module',

@@ -1,6 +1,7 @@
 import { createApp } from 'vue';
 import App from './views/App.vue';
 import { initContentScript } from '@/common/content';
+import 'virtual:uno.css';
 import '@/assets/style/reset.scss';
 
 console.log('[CRXJS] Hello world from content script!');

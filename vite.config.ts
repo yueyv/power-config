@@ -20,7 +20,7 @@ export default defineConfig({
   plugins: [
     vue(),
     vueJsx(),
-    UnoCSS(),
+
     AutoImport({
       resolvers: [
         ElementPlusResolver({
@@ -34,6 +34,9 @@ export default defineConfig({
           importStyle: 'sass',
         }),
       ],
+    }),
+    UnoCSS({
+      virtualModulePrefix: '@_',
     }),
     crx({ manifest }),
     zip({ outDir: 'release', outFileName: `crx-${name}-${version}.zip` }),
