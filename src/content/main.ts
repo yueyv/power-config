@@ -1,8 +1,8 @@
 import { createApp } from 'vue';
 import App from './views/App.vue';
-import { initContentScript } from '@/common/content';
-import 'virtual:uno.css';
 import '@/assets/style/reset.scss';
+import 'virtual:uno.css';
+import { initContentScript } from '@/common/content';
 
 console.log('[CRXJS] Hello world from content script!');
 
@@ -11,7 +11,10 @@ console.log('[CRXJS] Hello world from content script!');
  */
 function mountApp() {
   const container = document.createElement('div');
+
   container.id = 'crxjs-app';
+  // 使用内联样式确保定位，避免被页面样式覆盖
+
   document.body.appendChild(container);
   const app = createApp(App);
   app.mount(container);

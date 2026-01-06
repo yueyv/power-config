@@ -22,21 +22,13 @@ export default defineConfig({
     vueJsx(),
 
     AutoImport({
-      resolvers: [
-        ElementPlusResolver({
-          importStyle: 'sass',
-        }),
-      ],
+      resolvers: [ElementPlusResolver({})],
     }),
     Components({
-      resolvers: [
-        ElementPlusResolver({
-          importStyle: 'sass',
-        }),
-      ],
+      resolvers: [ElementPlusResolver({})],
     }),
     UnoCSS({
-      virtualModulePrefix: '@_',
+      virtualModulePrefix: '@uno_',
     }),
     crx({ manifest }),
     zip({ outDir: 'release', outFileName: `crx-${name}-${version}.zip` }),
