@@ -80,7 +80,7 @@ export async function setLogger(
     };
 
     // 追加新日志
-    storage.logs.push(logEntry);
+    storage.logs.unshift(logEntry);
 
     // 保存日志
     await saveLogs(storage.logs, storage.maxLogs);

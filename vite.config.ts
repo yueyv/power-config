@@ -5,6 +5,7 @@ import vueJsx from '@vitejs/plugin-vue-jsx';
 import AutoImport from 'unplugin-auto-import/vite';
 import Components from 'unplugin-vue-components/vite';
 import { ElementPlusResolver } from 'unplugin-vue-components/resolvers';
+import UnoCSS from 'unocss/vite';
 import { defineConfig } from 'vite';
 import zip from 'vite-plugin-zip-pack';
 import manifest from './manifest.config.ts';
@@ -19,11 +20,20 @@ export default defineConfig({
   plugins: [
     vue(),
     vueJsx(),
+    UnoCSS(),
     AutoImport({
-      resolvers: [ElementPlusResolver()],
+      resolvers: [
+        ElementPlusResolver({
+          importStyle: 'sass',
+        }),
+      ],
     }),
     Components({
-      resolvers: [ElementPlusResolver()],
+      resolvers: [
+        ElementPlusResolver({
+          importStyle: 'sass',
+        }),
+      ],
     }),
     crx({ manifest }),
     zip({ outDir: 'release', outFileName: `crx-${name}-${version}.zip` }),

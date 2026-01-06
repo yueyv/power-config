@@ -12,11 +12,21 @@ export {}
 /* prettier-ignore */
 declare module 'vue' {
   export interface GlobalComponents {
+    ElAutoResizer: typeof import('element-plus/es')['ElAutoResizer']
+    ElConfigProvider: typeof import('element-plus/es')['ElConfigProvider']
+    ElDialog: typeof import('element-plus/es')['ElDialog']
+    ElProjectProvider: typeof import('element-plus/es')['ElProjectProvider']
+    ElTableV2: typeof import('element-plus/es')['ElTableV2']
     HelloWorld: typeof import('./src/components/HelloWorld.vue')['default']
   }
 }
 
 // For TSX support
 declare global {
+  const ElAutoResizer: typeof import('element-plus/es')['ElAutoResizer']
+  const ElConfigProvider: typeof import('element-plus/es')['ElConfigProvider']
+  const ElDialog: typeof import('element-plus/es')['ElDialog']
+  const ElProjectProvider: typeof import('element-plus/es')['ElProjectProvider']
+  const ElTableV2: typeof import('element-plus/es')['ElTableV2']
   const HelloWorld: typeof import('./src/components/HelloWorld.vue')['default']
 }
