@@ -2,7 +2,9 @@ export const IGNORE_TYPES = ['image', 'stylesheet', 'font', 'script'];
 export const IGNORE_INITIATORS = ['https://developer.chrome.google.cn'];
 export const TARGET_URLS = ['/ecpp/product/common/my-saas'];
 export const XHR_PORT_NAME = 'xhr-inject';
+export const XHR_LOGGER_PORT_NAME = 'xhr-logger';
 export const LOGGER_NAME = 'logger';
+export const BACKGROUND_CONTENT_CONNECTION_NAME = 'background-content-connection';
 export const LOGGER_LEVEL = {
   ACTION: 'action',
   RESPONSE: 'response',
@@ -11,6 +13,17 @@ export const LOGGER_LEVEL = {
   INFO: 'info',
   WARN: 'warn',
 };
+export const CONNECT_STATUS = {
+  CREATE: 'create',
+  CONNECT: 'connect',
+  DISCONNECT: 'disconnect',
+  ERROR: 'error',
+  DEBUG: 'debug',
+  INFO: 'info',
+  WARN: 'warn',
+  CLICK_EVENT: 'click-event',
+};
+
 export const LOGGER_TARGET = {
   BACKGROUND: 'background',
   CONTENT: 'content',

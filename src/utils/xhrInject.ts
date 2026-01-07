@@ -1,5 +1,5 @@
-import { sendXHRMessage } from '@/common';
-import { TARGET_URLS } from '@/constants';
+import { sendLoggerMessage, sendXHRMessage } from '@/common';
+import { LOGGER_LEVEL, TARGET_URLS } from '@/constants';
 
 /**
  * 解析响应数据
@@ -27,7 +27,6 @@ function isTargetUrl(url: string, targetUrls: string[]): boolean {
  * @param options 配置选项
  */
 export function injectXHRInterceptor(options: XHRInterceptorOptions = {}): void {
-  // 防止重复注入
   if ((XMLHttpRequest.prototype as any).__xhrInterceptorInjected) {
     console.warn('XMLHttpRequest 拦截器已注入，跳过重复注入');
     return;
@@ -35,7 +34,6 @@ export function injectXHRInterceptor(options: XHRInterceptorOptions = {}): void 
 
   const { targetUrls = TARGET_URLS, enableLog = true, onRequest, onResponse, onError } = options;
 
-  // 标记已注入
   (XMLHttpRequest.prototype as any).__xhrInterceptorInjected = true;
 
   if (enableLog) {
@@ -100,14 +98,13 @@ export function injectXHRInterceptor(options: XHRInterceptorOptions = {}): void 
           console.group(`%c[XHR Response] ${method} ${url}`, 'color:green;font-weight:bold');
           console.log('状态码:', status);
           console.log('响应数据:', responseData);
-          sendXHRMessage({
-            url,
-            status,
-            responseData,
-          });
           console.groupEnd();
         }
-
+        sendXHRMessage({
+          url,
+          status,
+          responseData,
+        });
         // 触发响应回调
         if (onResponse) {
           try {
@@ -175,5 +172,17 @@ export function removeXHRInterceptor(): void {
 
 if (typeof window !== 'undefined') {
   // 在浏览器环境中自动注入
-  injectXHRInterceptor();
+  injectXHRInterceptor({
+    targetUrls: TARGET_URLS,
+    enableLog: true,
+    onRequest: (method, url) => {
+      sendLoggerMessage(LOGGER_LEVEL.ACTION, `发起请求 ${method} ${url}`);
+    },
+    onResponse: (method, url, response, status) => {
+      sendLoggerMessage(LOGGER_LEVEL.RESPONSE, `收到响应 ${method} ${url} ${status}`);
+    },
+    onError: (method, url, error) => {
+      sendLoggerMessage(LOGGER_LEVEL.ERROR, `错误 ${method} ${url} ${error.message}`, error);
+    },
+  });
 }

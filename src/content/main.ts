@@ -3,8 +3,7 @@ import App from './views/App.vue';
 import '@/assets/style/reset.scss';
 import 'virtual:uno.css';
 import { initContentScript } from '@/common/content';
-
-console.log('[CRXJS] Hello world from content script!');
+import './background';
 
 /**
  * Mount the Vue app to the DOM.

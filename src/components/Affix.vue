@@ -92,7 +92,6 @@ const handleMouseMove = (e: MouseEvent) => {
 
   const newX = e.clientX - dragState.value.offsetX;
   const newY = e.clientY - dragState.value.offsetY;
-  console.log(e, dragState.value);
   if (
     Math.abs(e.clientX - dragState.value.startX) < 10 &&
     Math.abs(e.clientY - dragState.value.startY) < 10

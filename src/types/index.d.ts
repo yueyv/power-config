@@ -76,3 +76,8 @@ declare module '*.webp' {
   const content: string;
   export default content;
 }
+
+interface BackgroundConnectionMessage {
+  status: string;
+  message?: any;
+}
