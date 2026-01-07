@@ -22,7 +22,7 @@
       </template>
     </el-auto-resizer>
     <el-dialog v-model="logDetailVisible" title="日志数据详情" width="400px">
-      <pre class="log-data h-40 max-h-40" :title="JSON.stringify(currentLogData, null, 2)">{{
+      <pre class="log-data" :title="JSON.stringify(currentLogData, null, 2)">{{
         JSON.stringify(currentLogData, null, 2)
       }}</pre>
       <template #footer>
@@ -33,10 +33,15 @@
 </template>
 
 <script setup lang="ts">
+import 'element-plus/theme-chalk/el-button.css';
+import 'element-plus/theme-chalk/el-message.css';
+import 'element-plus/theme-chalk/el-message-box.css';
+import 'element-plus/theme-chalk/el-dialog.css';
+import 'element-plus/theme-chalk/el-table-v2.css';
 import { clearLogs, getLogs } from '@/utils/log';
 import { onMounted, ref, h } from 'vue';
 import dayjs from 'dayjs';
-import { ElButton, ElMessageBox } from 'element-plus';
+import { ElButton, ElMessageBox, ElTooltip } from 'element-plus';
 
 const tableData = ref<any>([]);
 const logDetailVisible = ref(false);
@@ -84,7 +89,9 @@ const columns = ref<any>([
     width: 200,
     align: 'center',
     cellRenderer: ({ rowData }: { rowData: LogEntry }) => {
-      return h('div', { class: 'log-message', title: rowData.message }, rowData.message || '-');
+      return h(ElTooltip, { content: rowData.message || '-', placement: 'top' }, () =>
+        h('span', { class: 'log-message' }, rowData.message || '-')
+      );
     },
   },
   {
@@ -305,7 +312,7 @@ onMounted(() => {
   overflow: auto;
   white-space: pre-wrap;
   word-break: break-all;
-
+  max-height: 160px;
   &::-webkit-scrollbar {
     width: 4px;
     height: 4px;

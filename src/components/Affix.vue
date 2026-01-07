@@ -26,7 +26,9 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue';
-
+const emit = defineEmits<{
+  (e: 'choose'): void;
+}>();
 interface Props {
   /** 初始位置 x */
   initialX?: number;
@@ -49,7 +51,7 @@ const affixRef = ref<HTMLElement | null>(null);
 const isDragging = ref(false);
 const isLeft = ref(false);
 const isRight = ref(false);
-
+const isChoose = ref(false);
 const position = ref({
   x: props.initialX,
   y: props.initialY,
@@ -71,6 +73,7 @@ const handleMouseDown = (e: MouseEvent) => {
   if (!affixRef.value) return;
 
   isDragging.value = true;
+  isChoose.value = true;
   const rect = affixRef.value.getBoundingClientRect();
   dragState.value = {
     startX: e.clientX,
@@ -89,7 +92,13 @@ const handleMouseMove = (e: MouseEvent) => {
 
   const newX = e.clientX - dragState.value.offsetX;
   const newY = e.clientY - dragState.value.offsetY;
-
+  console.log(e, dragState.value);
+  if (
+    Math.abs(e.clientX - dragState.value.startX) < 10 &&
+    Math.abs(e.clientY - dragState.value.startY) < 10
+  ) {
+    isChoose.value = false;
+  }
   // 获取窗口尺寸
   const windowWidth = window.innerWidth;
   const windowHeight = window.innerHeight;
@@ -129,6 +138,10 @@ const handleMouseMove = (e: MouseEvent) => {
 
 const handleMouseUp = () => {
   isDragging.value = false;
+  if (isChoose.value) {
+    emit('choose');
+    isChoose.value = false;
+  }
   document.removeEventListener('mousemove', handleMouseMove);
   document.removeEventListener('mouseup', handleMouseUp);
 };

@@ -1,6 +1,6 @@
 <template>
   <el-config-provider :locale="zhCn">
-    <Affix @click="handleClick"> </Affix>
+    <Affix @choose="handleClick"> </Affix>
     <el-dialog v-model="visible" width="800px">
       <log-viewer class="h-60" />
     </el-dialog>

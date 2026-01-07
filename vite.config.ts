@@ -22,10 +22,18 @@ export default defineConfig({
     vueJsx(),
 
     AutoImport({
-      resolvers: [ElementPlusResolver({})],
+      resolvers: [
+        ElementPlusResolver({
+          importStyle: 'sass',
+        }),
+      ],
     }),
     Components({
-      resolvers: [ElementPlusResolver({})],
+      resolvers: [
+        ElementPlusResolver({
+          importStyle: 'sass',
+        }),
+      ],
     }),
     UnoCSS({
       virtualModulePrefix: '@uno_',
