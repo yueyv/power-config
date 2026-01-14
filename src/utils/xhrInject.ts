@@ -1,4 +1,5 @@
-import { sendLoggerMessage, sendXHRMessage } from '@/common';
+import { sendLoggerMessage } from '@/common';
+import { sendXHRMessage } from '@/common/xhr';
 import { LOGGER_LEVEL, TARGET_URLS } from '@/constants';
 
 /**

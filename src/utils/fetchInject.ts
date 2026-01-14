@@ -1,4 +1,5 @@
-import { sendLoggerMessage, sendFetchMessage } from '@/common';
+import { sendLoggerMessage } from '@/common';
+import { sendFetchMessage } from '@/common/fetch';
 import { LOGGER_LEVEL, TARGET_URLS } from '@/constants';
 
 /**
