@@ -2,7 +2,7 @@ import { createApp } from 'vue';
 import App from './views/App.vue';
 import '@/assets/style/reset.scss';
 import 'virtual:uno.css';
-import { initContentScript } from '@/common/content';
+import { initContentScript } from '@/common/message/content';
 import './background';
 
 /**

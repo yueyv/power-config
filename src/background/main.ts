@@ -1,1 +1,2 @@
-import './content';
+import useBackgroundConnection from '@/common/message/background';
+useBackgroundConnection();

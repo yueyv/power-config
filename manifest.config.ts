@@ -5,7 +5,8 @@ export default defineManifest({
   manifest_version: 3,
   name: pkg.name,
   version: pkg.version,
-  host_permissions: ['<all_urls>', 'file:///*'],
+  host_permissions: ['file:///*'],
+  //   host_permissions: ['<all_urls>'],
   icons: {
     48: 'public/logo.png',
   },
@@ -18,11 +19,13 @@ export default defineManifest({
   content_scripts: [
     {
       js: ['src/content/main.ts'],
-      matches: ['https://*/*', 'file:///*'],
+      //   matches: ['https://*/*'],
+      matches: ['file:///*'],
     },
     {
       js: ['src/utils/xhrInject.ts'],
-      matches: ['https://*/*', 'file:///*'],
+      //   matches: ['https://*/*'],
+      matches: ['file:///*'],
       all_frames: true,
       match_about_blank: true,
       run_at: 'document_end',
@@ -30,7 +33,8 @@ export default defineManifest({
     },
     {
       js: ['src/utils/fetchInject.ts'],
-      matches: ['https://*/*', 'file:///*'],
+      //   matches: ['https://*/*'],
+      matches: ['file:///*'],
       all_frames: true,
       match_about_blank: true,
       run_at: 'document_end',

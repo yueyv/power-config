@@ -1,4 +1,4 @@
 export * from './log';
 export * from './xhr';
 export * from './fetch';
-export * from './content';
+export * from './message/content';
