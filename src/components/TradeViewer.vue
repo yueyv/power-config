@@ -1,12 +1,19 @@
 <template>
   <div class="log-viewer">
     <div class="log-header">
-      <h2 class="log-title">日志查看器</h2>
+      <h2 class="log-title">电力交易</h2>
       <div class="flex items-center gap-2">
+        <el-input v-model="electricityVolume" placeholder="拟交易电量">
+          <template #prepend>
+            <span>拟交易电量</span>
+          </template>
+          <template #suffix>
+            <span>kWh</span>
+          </template>
+        </el-input>
         <div class="log-stats">
           <span class="stat-item">总计: {{ tableData.length }}</span>
         </div>
-        <el-button type="primary" @click="clearAllLogs" size="small">清空</el-button>
       </div>
     </div>
     <el-auto-resizer>
@@ -21,14 +28,6 @@
         />
       </template>
     </el-auto-resizer>
-    <el-dialog v-model="logDetailVisible" title="日志数据详情" width="400px">
-      <pre class="log-data" :title="JSON.stringify(currentLogData, null, 2)">{{
-        JSON.stringify(currentLogData, null, 2)
-      }}</pre>
-      <template #footer>
-        <el-button type="primary" @click="copyLogData" size="small">复制</el-button>
-      </template>
-    </el-dialog>
   </div>
 </template>
 
@@ -38,114 +37,60 @@ import 'element-plus/theme-chalk/el-message.css';
 import 'element-plus/theme-chalk/el-message-box.css';
 import 'element-plus/theme-chalk/el-dialog.css';
 import 'element-plus/theme-chalk/el-table-v2.css';
-import { clearLogs, getLogs } from '@/model/log';
-import { onMounted, ref, h } from 'vue';
-import dayjs from 'dayjs';
-import { ElButton, ElMessageBox, ElTooltip } from 'element-plus';
+import { ref, h } from 'vue';
 
 const tableData = ref<any>([]);
-const logDetailVisible = ref(false);
+const electricityVolume = ref(0);
 const props = defineProps<{
   dialogHeight?: number;
 }>();
-const currentLogData = ref(null);
 const columns = ref<any>([
   {
-    key: 'loggerTimestamp',
-    title: '时间',
+    key: 'listedElec',
+    title: '挂牌电量',
     width: 160,
     align: 'center',
-    cellRenderer: ({ rowData }: { rowData: LogEntry }) => {
-      return h(
-        'span',
-        { class: 'timestamp' },
-        dayjs(rowData.timestamp).format('YYYY-MM-DD HH:mm:ss')
-      );
-    },
   },
   {
-    key: 'loggerType',
-    title: '日志类型',
+    key: 'remainingElec',
+    title: '剩余电量',
     width: 110,
+    align: 'center',
+  },
+  {
+    key: 'listedPrice',
+    title: '挂牌价格',
+    width: 110,
+    align: 'center',
+  },
+  {
+    key: 'd1CurveValue',
+    title: 'D1曲线现货价值',
+    width: 200,
+    align: 'center',
+  },
+  {
+    key: 'thisCurveValue',
+    title: '该曲线现货价值',
+    width: 200,
+    align: 'center',
+  },
+  {
+    key: 'partialTrade',
+    title: '部分成交',
+    width: 200,
+    align: 'center',
+  },
+  {
+    key: 'buyElec',
+    title: '购买',
+    width: 200,
     align: 'center',
     cellRenderer: ({ rowData }: { rowData: LogEntry }) => {
       return h('span', { class: 'log-type' }, rowData.target);
     },
   },
-  {
-    key: 'loggerLevel',
-    title: '日志级别',
-    width: 110,
-    align: 'center',
-    cellRenderer: ({ rowData }: { rowData: LogEntry }) => {
-      const level = rowData.level?.toLowerCase() || 'info';
-      const levelClass = `log-level log-level-${level}`;
-      return h('span', { class: levelClass }, rowData.level);
-    },
-  },
-  {
-    key: 'loggerMessage',
-    title: '日志消息',
-    width: 200,
-    align: 'center',
-    cellRenderer: ({ rowData }: { rowData: LogEntry }) => {
-      return h(ElTooltip, { content: rowData.message || '-', placement: 'top' }, () =>
-        h('span', { class: 'log-message' }, rowData.message || '-')
-      );
-    },
-  },
-  {
-    key: 'loggerData',
-    title: '日志数据',
-    width: 200,
-    align: 'center',
-    cellRenderer: ({ rowData }: { rowData: LogEntry }) => {
-      if (!rowData.data) return h('span', { class: 'no-data' }, '-');
-      if (typeof rowData.data === 'object') {
-        return h(
-          ElButton,
-          {
-            type: 'primary',
-            size: 'small',
-            onClick: () => {
-              currentLogData.value = rowData.data;
-              logDetailVisible.value = true;
-            },
-          },
-          '查看详情'
-        );
-      }
-      return h('span', { class: 'log-data', title: String(rowData.data) }, String(rowData.data));
-    },
-  },
 ]);
-
-const getTableData = async () => {
-  tableData.value = await getLogs();
-};
-
-const copyLogData = () => {
-  navigator.clipboard.writeText(JSON.stringify(currentLogData.value, null, 2));
-  ElMessage.success('复制成功');
-};
-
-const clearAllLogs = async () => {
-  await ElMessageBox.confirm('确定清空所有日志吗？', '提示', {
-    confirmButtonText: '确定',
-    cancelButtonText: '取消',
-    type: 'warning',
-  });
-  await clearLogs();
-  ElMessage.success('清空成功');
-  getTableData();
-};
-
-onMounted(() => {
-  getTableData();
-  setInterval(async () => {
-    getTableData();
-  }, 1000);
-});
 </script>
 <style scoped lang="scss">
 .log-viewer {

@@ -1,5 +1,5 @@
-import { handleXHRMessage } from '.';
+import { handleMessage } from '.';
 
 export function initContentScript() {
-  handleXHRMessage();
+  handleMessage();
 }

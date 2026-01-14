@@ -13,22 +13,26 @@ export {}
 declare module 'vue' {
   export interface GlobalComponents {
     Affix: typeof import('./src/components/Affix.vue')['default']
+    copy: typeof import('./src/components/LogViewer copy.vue')['default']
     ElAutoResizer: typeof import('element-plus/es')['ElAutoResizer']
     ElConfigProvider: typeof import('element-plus/es')['ElConfigProvider']
     ElDialog: typeof import('element-plus/es')['ElDialog']
+    ElInput: typeof import('element-plus/es')['ElInput']
     ElTableV2: typeof import('element-plus/es')['ElTableV2']
     LogViewer: typeof import('./src/components/LogViewer.vue')['default']
-    OperatorDialog: typeof import('./src/components/OperatorDialog.vue')['default']
+    TradeViewer: typeof import('./src/components/TradeViewer.vue')['default']
   }
 }
 
 // For TSX support
 declare global {
   const Affix: typeof import('./src/components/Affix.vue')['default']
+  const copy: typeof import('./src/components/LogViewer copy.vue')['default']
   const ElAutoResizer: typeof import('element-plus/es')['ElAutoResizer']
   const ElConfigProvider: typeof import('element-plus/es')['ElConfigProvider']
   const ElDialog: typeof import('element-plus/es')['ElDialog']
+  const ElInput: typeof import('element-plus/es')['ElInput']
   const ElTableV2: typeof import('element-plus/es')['ElTableV2']
   const LogViewer: typeof import('./src/components/LogViewer.vue')['default']
-  const OperatorDialog: typeof import('./src/components/OperatorDialog.vue')['default']
+  const TradeViewer: typeof import('./src/components/TradeViewer.vue')['default']
 }

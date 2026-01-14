@@ -1,11 +1,27 @@
-import { LOGGER_LEVEL, LOGGER_TARGET, XHR_LOGGER_PORT_NAME, XHR_PORT_NAME } from '@/constants';
+import {
+  LOGGER_LEVEL,
+  LOGGER_TARGET,
+  XHR_LOGGER_PORT_NAME,
+  XHR_PORT_NAME,
+  FETCH_PORT_NAME,
+} from '@/constants';
 import { DOMAIN } from '@/constants';
-import { logAction, logResponse, logError, logDebug, logInfo, logWarn } from '@/utils/log';
+import { logAction, logResponse, logError, logDebug, logInfo, logWarn } from '@/model/log';
 
 export function sendXHRMessage(message: any) {
   window.postMessage(
     {
       type: XHR_PORT_NAME,
+      message,
+    },
+    DOMAIN
+  );
+}
+
+export function sendFetchMessage(message: any) {
+  window.postMessage(
+    {
+      type: FETCH_PORT_NAME,
       message,
     },
     DOMAIN
@@ -45,7 +61,7 @@ export function receiveLoggerMessage(level: string, message: any, data?: any) {
   }
 }
 
-export function handleXHRMessage() {
+export function handleMessage() {
   window.addEventListener('message', function (event) {
     if (event.source !== window || !event.data) {
       return;
@@ -54,6 +70,12 @@ export function handleXHRMessage() {
       case XHR_PORT_NAME:
         chrome.runtime.sendMessage({
           type: XHR_PORT_NAME,
+          message: event.data.message,
+        });
+        break;
+      case FETCH_PORT_NAME:
+        chrome.runtime.sendMessage({
+          type: FETCH_PORT_NAME,
           message: event.data.message,
         });
         break;

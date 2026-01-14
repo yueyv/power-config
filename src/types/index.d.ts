@@ -15,6 +15,22 @@ interface XHRInterceptorOptions {
 }
 
 /**
+ * Fetch 拦截器配置选项
+ */
+interface FetchInterceptorOptions {
+  /** 需要拦截的 URL 路径列表 */
+  targetUrls?: string[];
+  /** 是否启用日志输出 */
+  enableLog?: boolean;
+  /** 自定义日志回调函数 */
+  onRequest?: (method: string, url: string, body?: any) => void;
+  /** 自定义响应回调函数 */
+  onResponse?: (method: string, url: string, response: any, status: number) => void;
+  /** 错误回调函数 */
+  onError?: (method: string, url: string, error: Error) => void;
+}
+
+/**
  * 扩展 XMLHttpRequest 接口，添加自定义属性
  */
 interface ExtendedXMLHttpRequest extends XMLHttpRequest {

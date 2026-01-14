@@ -42,7 +42,7 @@ interface Props {
 
 const props = withDefaults(defineProps<Props>(), {
   initialX: window.innerWidth - 100,
-  initialY: window.innerHeight - 100,
+  initialY: 100,
   snapDistance: 20,
   sidebarWidth: 0,
 });

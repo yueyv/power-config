@@ -2,7 +2,7 @@
   <el-config-provider :locale="zhCn">
     <Affix @choose="handleClick"> </Affix>
     <el-dialog v-model="visible" width="800px">
-      <log-viewer class="h-60" />
+      <trade-viewer class="h-60" />
     </el-dialog>
   </el-config-provider>
 </template>

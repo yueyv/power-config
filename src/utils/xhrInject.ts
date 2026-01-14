@@ -75,7 +75,7 @@ export function injectXHRInterceptor(options: XHRInterceptorOptions = {}): void 
   ) {
     const method = this._method || 'UNKNOWN';
     const url = this._url || 'UNKNOWN';
-
+    console.log('xhr url', url);
     // 检查是否是目标 URL
     if (isTargetUrl(url, targetUrls)) {
       // 触发请求回调
