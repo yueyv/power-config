@@ -34,6 +34,20 @@
         <path d="M12 2L2 22h20L12 2z" />
       </svg>
     </div>
+    <div class="affix-icon complete" v-if="tradeStatus === TRADE_STATUS.COMPLETE">
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <circle cx="12" cy="12" r="10" />
+        <path d="M9 12l2 2 4-4" />
+      </svg>
+    </div>
   </div>
 </template>
 
@@ -266,5 +280,9 @@ onUnmounted(() => {
 
 .affix-icon.trade {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+}
+
+.affix-icon.complete {
+  background: linear-gradient(135deg, #4caf50 0%, #8bc34a 100%) !important;
 }
 </style>

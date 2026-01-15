@@ -121,6 +121,12 @@ interface BUY_DATA_ITEM {
   xtdqsj?: string;
 }
 
+interface CHOICE_SELL_DATA {
+  prevChoice: { id: number; elecVolume: number }[];
+  currentChoice: { id: number; elecVolume: number };
+  nextChoice: { id: number; elecVolume: number }[];
+}
+
 interface SELL_DATA_ITEM {
   gpdl: number;
   dprice: number;

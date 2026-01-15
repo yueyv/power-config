@@ -45,6 +45,8 @@ export const CHOICE_SELL_DATA_KEY = 'choiceSellData';
 
 export const SELL_DATA_STATUS_KEY = 'sellDataStatus';
 
+export const TRADE_ELECTRICITY_VOLUME_KEY = 'tradeElectricityVolume';
+
 export enum TRADE_STATUS {
   DISPLAY = 'display',
   TRADE = 'trade',
@@ -59,4 +61,5 @@ export enum EXECUTION_TYPE {
   TRADE = 'trade',
   CANCEL_TRADE = 'cancel_trade',
   TRADE_END = 'trade_end',
+  NEXT_CHOICE = 'next_choice',
 }

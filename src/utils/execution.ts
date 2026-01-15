@@ -2,7 +2,6 @@ import { EXECUTION_TYPE } from '@/constants';
 import { mainLogError, mainLogInfo } from '@/model/log';
 let iframe = undefined;
 let iframeDocument: Document | undefined = undefined;
-let choiceSellData: { id: number; elecVolume: number }[] = [];
 let prevChoice: { id: number; elecVolume: number }[] = [];
 let nextChoice: { id: number; elecVolume: number }[] = [];
 let currentChoice: { id: number; elecVolume: number } = { id: 0, elecVolume: 0 };
@@ -115,11 +114,12 @@ export function getMCGPTableData(): BUY_DATA_ITEM[] | null {
 async function updateChoice(currentChoiceElement: HTMLTableRowElement | null) {
   await new Promise((resolve) => setTimeout(resolve, 5000));
   // 处理nextChoice
-
-  prevChoice.push(currentChoice);
-  currentChoice = nextChoice[0];
-  nextChoice = nextChoice.slice(1);
-  tradeIframe();
+  window.postMessage(
+    {
+      type: EXECUTION_TYPE.NEXT_CHOICE,
+    },
+    '*'
+  );
 }
 
 export async function tradeIframe() {
@@ -201,14 +201,17 @@ window.addEventListener('message', (event) => {
       break;
     case EXECUTION_TYPE.CANCEL_TRADE:
       mainLogInfo('终止交易', event.data.message);
+      prevChoice = [];
+      nextChoice = [];
+      currentChoice = { id: 0, elecVolume: 0 };
+      tradeIframe();
       break;
     case EXECUTION_TYPE.TRADE:
       mainLogInfo('交易', JSON.parse(event.data.message));
-      choiceSellData = JSON.parse(event.data.message);
-      currentChoice = choiceSellData[0];
-      prevChoice = [];
-      nextChoice = choiceSellData.slice(1);
+      const choiceSellData: CHOICE_SELL_DATA = JSON.parse(event.data.message);
+      currentChoice = choiceSellData.currentChoice;
+      prevChoice = choiceSellData.prevChoice;
+      nextChoice = choiceSellData.nextChoice;
       tradeIframe();
-      break;
   }
 });

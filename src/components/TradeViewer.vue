@@ -15,7 +15,12 @@
           @click="handleTradeClick"
           >交易</el-button
         >
-        <el-input v-model="electricityVolume" placeholder="拟交易电量" style="width: 280px">
+        <el-input
+          v-model="electricityVolume"
+          :disabled="tradeStatus === TRADE_STATUS.TRADE"
+          placeholder="拟交易电量"
+          style="width: 280px"
+        >
           <template #prepend>
             <span>拟交易电量</span>
           </template>
@@ -50,9 +55,14 @@ import 'element-plus/theme-chalk/el-message-box.css';
 import 'element-plus/theme-chalk/el-dialog.css';
 import 'element-plus/theme-chalk/el-checkbox.css';
 import 'element-plus/theme-chalk/el-table-v2.css';
-import { computed, h, ref } from 'vue';
+import { computed, h, onMounted, ref } from 'vue';
 import { CheckboxValueType, ElCheckbox, ElMessageBox } from 'element-plus';
 import { TRADE_STATUS } from '@/constants';
+import {
+  getChoiceSellData,
+  getTradeElectricityVolume,
+  setTradeElectricityVolume,
+} from '@/model/sellData';
 
 const electricityVolume = ref(0);
 const emits = defineEmits(['trade', 'cancel']);
@@ -202,7 +212,7 @@ const handleTradeClick = async () => {
       }
     }
   });
-
+  setTradeElectricityVolume(electricityVolume.value);
   emits('trade', tradeData);
 };
 
@@ -213,6 +223,23 @@ const handleCancelClick = async () => {
   });
   emits('cancel');
 };
+
+onMounted(() => {
+  getTradeElectricityVolume().then((volume: number | undefined) => {
+    if (volume) {
+      electricityVolume.value = volume;
+    }
+  });
+  getChoiceSellData().then((data: CHOICE_SELL_DATA) => {
+    if (data) {
+      choiceSellData.value = [
+        ...data.prevChoice.map((item) => item.id),
+        data.currentChoice.id,
+        ...data.nextChoice.map((item) => item.id),
+      ];
+    }
+  });
+});
 </script>
 <style scoped lang="scss">
 .elec-viewer {

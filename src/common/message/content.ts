@@ -5,12 +5,36 @@ import { receiveLoggerMessage } from '../log';
 import { BACKGROUND_CONTENT_CONNECTION_NAME, CONNECT_STATUS } from '@/constants';
 import { ref } from 'vue';
 import { logInfo } from '@/model/log';
-import { setSellData, setSellDataStatus } from '@/model/sellData';
+import {
+  getChoiceSellData,
+  getSellDataStatus,
+  setChoiceSellData,
+  setSellData,
+  setSellDataStatus,
+} from '@/model/sellData';
 
 export function useBackgroundConnection() {
   const backgroundConnection = chrome.runtime.connect({ name: BACKGROUND_CONTENT_CONNECTION_NAME });
   const tradeStatus = ref<string>(TRADE_STATUS.DISPLAY);
   const sellData = ref<SELL_DATA_ITEM[]>([]);
+  getSellDataStatus().then((status: string | undefined) => {
+    if (status) {
+      tradeStatus.value = status;
+    }
+    if (status === TRADE_STATUS.TRADE) {
+      initIframe();
+      console.log('TRADE_STATUS.TRADE');
+      getChoiceSellData().then((data: CHOICE_SELL_DATA) => {
+        window.postMessage(
+          {
+            type: EXECUTION_TYPE.TRADE,
+            message: JSON.stringify(data),
+          },
+          '*'
+        );
+      });
+    }
+  });
   // 监听消息
   backgroundConnection.onMessage.addListener((msg) => {
     switch (msg.status) {
@@ -23,7 +47,7 @@ export function useBackgroundConnection() {
   });
 
   // 监听消息
-  window.addEventListener('message', function (event) {
+  window.addEventListener('message', async function (event) {
     if (event.source !== window || !event.data) {
       return;
     }
@@ -63,6 +87,22 @@ export function useBackgroundConnection() {
         logInfo('content', '获取挂牌数据成功', sellData.value);
         setSellData(sellData.value);
         break;
+      case EXECUTION_TYPE.NEXT_CHOICE:
+        const choiceSellData: CHOICE_SELL_DATA = await getChoiceSellData();
+        choiceSellData.prevChoice.push(choiceSellData.currentChoice);
+        choiceSellData.currentChoice = choiceSellData.nextChoice[0];
+        choiceSellData.nextChoice = choiceSellData.nextChoice.slice(1);
+        setChoiceSellData(choiceSellData);
+        logInfo('content', '完成选择', choiceSellData);
+        // todo 需要记录选择的数据的实际购买电量
+        window.postMessage(
+          {
+            type: EXECUTION_TYPE.TRADE,
+            message: JSON.stringify(choiceSellData),
+          },
+          '*'
+        );
+        break;
       case EXECUTION_TYPE.TRADE_END:
         tradeStatus.value = TRADE_STATUS.COMPLETE;
         setSellDataStatus(tradeStatus.value);
@@ -90,6 +130,11 @@ export function useBackgroundConnection() {
   function tradeIframe(data: { id: number; elecVolume: number }[]) {
     tradeStatus.value = TRADE_STATUS.TRADE;
     setSellDataStatus(tradeStatus.value);
+    setChoiceSellData({
+      prevChoice: [],
+      currentChoice: data[0],
+      nextChoice: data.slice(1),
+    });
     window.postMessage(
       {
         type: EXECUTION_TYPE.TRADE,
