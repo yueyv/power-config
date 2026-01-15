@@ -11,10 +11,11 @@
 import zhCn from 'element-plus/es/locale/lang/zh-cn';
 import { ref } from 'vue';
 import { useBackgroundConnection } from '@/common/message/content';
-const { sellData } = useBackgroundConnection();
+const { sellData, initIframe } = useBackgroundConnection();
 const visible = ref(false);
 const handleClick = () => {
   visible.value = true;
+  initIframe();
 };
 </script>
 <style scoped lang="scss">

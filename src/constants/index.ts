@@ -29,6 +29,7 @@ export const LOGGER_TARGET = {
   BACKGROUND: 'background',
   CONTENT: 'content',
   POPUP: 'popup',
+  EXECUTION: 'execution',
 };
 
 // 开发环境使用*，生产环境使用具体域名
@@ -47,4 +48,10 @@ export enum TRADE_STATUS {
   TRADE = 'trade',
   CANNEL = 'cannel',
   COMPLETE = 'complete',
+}
+
+export enum EXECUTION_TYPE {
+  INITIFRAME = 'initiframe',
+  LOG_INFO = 'log_info',
+  GET_SELL_DATA = 'get_sell_data',
 }

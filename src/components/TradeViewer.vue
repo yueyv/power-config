@@ -73,6 +73,9 @@ const columns = ref<any>([
       return h(ElCheckbox, {
         modelValue: choiceSellData.value.includes(rowData.gpid),
         key: rowData.gpid,
+        disabled:
+          choiceSellDataTotal.value >= electricityVolume.value &&
+          !choiceSellData.value.includes(rowData.gpid),
         onChange: (value: CheckboxValueType) => {
           if (value) {
             choiceSellData.value = [...choiceSellData.value, rowData.gpid];
@@ -195,6 +198,7 @@ const handleTradeClick = async () => {
   display: flex;
   gap: 12px;
   font-size: 12px;
+  color: #f56c6c;
 }
 
 .stat-item {

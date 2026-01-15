@@ -114,11 +114,11 @@ interface BUY_DATA_ITEM {
   // 挂牌价格
   gpdj: number;
   // 摘牌系统时间
-  zpsysj: string;
+  zpsysj?: string;
   // 合同标的时间
-  hybdsj: string;
+  hybdsj?: string;
   // 系统订单时间
-  xtdqsj: string;
+  xtdqsj?: string;
 }
 
 interface SELL_DATA_ITEM {
@@ -132,4 +132,15 @@ interface SELL_DATA_ITEM {
   xhprice: number;
   zpsysj: string;
   gpdj: number;
+}
+interface MCGPTableRow {
+  挂牌电量: number;
+  剩余电量: number;
+  挂牌价格: number;
+  D1曲线现货价值估算值: number;
+  该曲线现货价值估算值: number;
+  部分成交: string;
+  合约标的时间: string;
+  操作ID: number;
+  详情ID: number;
 }

@@ -1,4 +1,4 @@
-import { LOGGER_NAME, LOGGER_LEVEL, DEFAULT_MAX_LOGS } from '@/constants';
+import { LOGGER_NAME, LOGGER_LEVEL, DEFAULT_MAX_LOGS, EXECUTION_TYPE } from '@/constants';
 
 /**
  * 获取存储键名
@@ -200,4 +200,64 @@ export function logResponse(target: string, message: string, data?: any): Promis
  */
 export function logAction(target: string, message: string, data?: any): Promise<void> {
   return setLogger(LOGGER_LEVEL.ACTION, target, message, data);
+}
+
+export function mainLogInfo(message: string, data?: any) {
+  window.postMessage(
+    {
+      type: EXECUTION_TYPE.LOG_INFO,
+      message: JSON.stringify({ level: LOGGER_LEVEL.INFO, message, data }),
+    },
+    '*'
+  );
+}
+
+export function mainLogError(message: string, data?: any) {
+  window.postMessage(
+    {
+      type: EXECUTION_TYPE.LOG_INFO,
+      message: JSON.stringify({ level: LOGGER_LEVEL.ERROR, message, data }),
+    },
+    '*'
+  );
+}
+
+export function mainLogWarn(message: string, data?: any) {
+  window.postMessage(
+    {
+      type: EXECUTION_TYPE.LOG_INFO,
+      message: JSON.stringify({ level: LOGGER_LEVEL.WARN, message, data }),
+    },
+    '*'
+  );
+}
+
+export function mainLogDebug(message: string, data?: any) {
+  window.postMessage(
+    {
+      type: EXECUTION_TYPE.LOG_INFO,
+      message: JSON.stringify({ level: LOGGER_LEVEL.DEBUG, message, data }),
+    },
+    '*'
+  );
+}
+
+export function mainLogResponse(message: string, data?: any) {
+  window.postMessage(
+    {
+      type: EXECUTION_TYPE.LOG_INFO,
+      message: JSON.stringify({ level: LOGGER_LEVEL.RESPONSE, message, data }),
+    },
+    '*'
+  );
+}
+
+export function mainLogAction(message: string, data?: any) {
+  window.postMessage(
+    {
+      type: EXECUTION_TYPE.LOG_INFO,
+      message: JSON.stringify({ level: LOGGER_LEVEL.ACTION, message, data }),
+    },
+    '*'
+  );
 }

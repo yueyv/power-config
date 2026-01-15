@@ -13,7 +13,6 @@ export {}
 declare module 'vue' {
   export interface GlobalComponents {
     Affix: typeof import('./src/components/Affix.vue')['default']
-    copy: typeof import('./src/components/LogViewer copy.vue')['default']
     ElAutoResizer: typeof import('element-plus/es')['ElAutoResizer']
     ElButton: typeof import('element-plus/es')['ElButton']
     ElConfigProvider: typeof import('element-plus/es')['ElConfigProvider']
@@ -28,7 +27,6 @@ declare module 'vue' {
 // For TSX support
 declare global {
   const Affix: typeof import('./src/components/Affix.vue')['default']
-  const copy: typeof import('./src/components/LogViewer copy.vue')['default']
   const ElAutoResizer: typeof import('element-plus/es')['ElAutoResizer']
   const ElButton: typeof import('element-plus/es')['ElButton']
   const ElConfigProvider: typeof import('element-plus/es')['ElConfigProvider']

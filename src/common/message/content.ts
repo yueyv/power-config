@@ -1,9 +1,11 @@
-import { XHR_PORT_NAME } from '@/constants';
+import { EXECUTION_TYPE, XHR_PORT_NAME } from '@/constants';
 import { FETCH_PORT_NAME } from '@/constants';
 import { SCRIPT_LOGGER_PORT_NAME } from '@/constants';
 import { receiveLoggerMessage } from '../log';
 import { BACKGROUND_CONTENT_CONNECTION_NAME, CONNECT_STATUS } from '@/constants';
 import { ref } from 'vue';
+import { logInfo } from '@/model/log';
+import { setSellData } from '@/model/sellData';
 
 export function useBackgroundConnection() {
   const backgroundConnection = chrome.runtime.connect({ name: BACKGROUND_CONTENT_CONNECTION_NAME });
@@ -48,11 +50,17 @@ export function useBackgroundConnection() {
         break;
       // 从注入的content script 发送过来的日志消息转发给background
       case SCRIPT_LOGGER_PORT_NAME:
+      case EXECUTION_TYPE.LOG_INFO:
         receiveLoggerMessage(
           JSON.parse(event.data.message).level,
           JSON.parse(event.data.message).message,
           JSON.parse(event.data.message)?.data || null
         );
+        break;
+      case EXECUTION_TYPE.GET_SELL_DATA:
+        sellData.value = JSON.parse(event.data.message).data;
+        logInfo('content', '获取挂牌数据成功', sellData.value);
+        setSellData(sellData.value);
         break;
       default:
         break;
@@ -64,8 +72,17 @@ export function useBackgroundConnection() {
     }
   }
 
+  function initIframe() {
+    window.postMessage(
+      {
+        type: EXECUTION_TYPE.INITIFRAME,
+      },
+      '*'
+    );
+  }
   return {
     sendMessageToBackground,
+    initIframe,
     sellData,
   };
 }
