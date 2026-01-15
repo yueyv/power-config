@@ -6,7 +6,7 @@
     :style="affixStyle"
     @mousedown="handleMouseDown"
   >
-    <div class="affix-icon">
+    <div class="affix-icon" v-if="tradeStatus === TRADE_STATUS.DISPLAY">
       <svg
         xmlns="http://www.w3.org/2000/svg"
         viewBox="0 0 24 24"
@@ -21,11 +21,25 @@
         />
       </svg>
     </div>
+    <div class="affix-icon trade" v-if="tradeStatus === TRADE_STATUS.TRADE">
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M12 2L2 22h20L12 2z" />
+      </svg>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { TRADE_STATUS } from '@/constants';
 const emit = defineEmits<{
   (e: 'choose'): void;
 }>();
@@ -38,6 +52,8 @@ interface Props {
   snapDistance?: number;
   /** 侧边栏宽度 */
   sidebarWidth?: number;
+  /** 交易状态 */
+  tradeStatus: string;
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -246,5 +262,9 @@ onUnmounted(() => {
 .affix-container.is-left .affix-icon,
 .affix-container.is-right .affix-icon {
   background: linear-gradient(135deg, #93fbdc 0%, #57f2f5 100%);
+}
+
+.affix-icon.trade {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
 }
 </style>

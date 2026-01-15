@@ -1,14 +1,15 @@
-import { EXECUTION_TYPE, XHR_PORT_NAME } from '@/constants';
+import { EXECUTION_TYPE, TRADE_STATUS, XHR_PORT_NAME } from '@/constants';
 import { FETCH_PORT_NAME } from '@/constants';
 import { SCRIPT_LOGGER_PORT_NAME } from '@/constants';
 import { receiveLoggerMessage } from '../log';
 import { BACKGROUND_CONTENT_CONNECTION_NAME, CONNECT_STATUS } from '@/constants';
 import { ref } from 'vue';
 import { logInfo } from '@/model/log';
-import { setSellData } from '@/model/sellData';
+import { setSellData, setSellDataStatus } from '@/model/sellData';
 
 export function useBackgroundConnection() {
   const backgroundConnection = chrome.runtime.connect({ name: BACKGROUND_CONTENT_CONNECTION_NAME });
+  const tradeStatus = ref<string>(TRADE_STATUS.DISPLAY);
   const sellData = ref<SELL_DATA_ITEM[]>([]);
   // 监听消息
   backgroundConnection.onMessage.addListener((msg) => {
@@ -62,6 +63,11 @@ export function useBackgroundConnection() {
         logInfo('content', '获取挂牌数据成功', sellData.value);
         setSellData(sellData.value);
         break;
+      case EXECUTION_TYPE.TRADE_END:
+        tradeStatus.value = TRADE_STATUS.COMPLETE;
+        setSellDataStatus(tradeStatus.value);
+        logInfo('content', '交易结束');
+        break;
       default:
         break;
     }
@@ -80,9 +86,36 @@ export function useBackgroundConnection() {
       '*'
     );
   }
+
+  function tradeIframe(data: { id: number; elecVolume: number }[]) {
+    tradeStatus.value = TRADE_STATUS.TRADE;
+    setSellDataStatus(tradeStatus.value);
+    window.postMessage(
+      {
+        type: EXECUTION_TYPE.TRADE,
+        message: JSON.stringify(data),
+      },
+      '*'
+    );
+  }
+
+  function cancelTradeIframe() {
+    tradeStatus.value = TRADE_STATUS.DISPLAY;
+    setSellDataStatus(tradeStatus.value);
+    window.postMessage(
+      {
+        type: EXECUTION_TYPE.CANCEL_TRADE,
+      },
+      '*'
+    );
+  }
+
   return {
     sendMessageToBackground,
     initIframe,
     sellData,
+    tradeStatus,
+    tradeIframe,
+    cancelTradeIframe,
   };
 }

@@ -43,10 +43,12 @@ export const SELL_DATA_KEY = 'sellData';
 
 export const CHOICE_SELL_DATA_KEY = 'choiceSellData';
 
+export const SELL_DATA_STATUS_KEY = 'sellDataStatus';
+
 export enum TRADE_STATUS {
   DISPLAY = 'display',
   TRADE = 'trade',
-  CANNEL = 'cannel',
+  CANCEL_TRADE = 'cancel_trade',
   COMPLETE = 'complete',
 }
 
@@ -54,4 +56,7 @@ export enum EXECUTION_TYPE {
   INITIFRAME = 'initiframe',
   LOG_INFO = 'log_info',
   GET_SELL_DATA = 'get_sell_data',
+  TRADE = 'trade',
+  CANCEL_TRADE = 'cancel_trade',
+  TRADE_END = 'trade_end',
 }

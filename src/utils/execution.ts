@@ -2,11 +2,43 @@ import { EXECUTION_TYPE } from '@/constants';
 import { mainLogError, mainLogInfo } from '@/model/log';
 let iframe = undefined;
 let iframeDocument: Document | undefined = undefined;
-
+let choiceSellData: { id: number; elecVolume: number }[] = [];
+let prevChoice: { id: number; elecVolume: number }[] = [];
+let nextChoice: { id: number; elecVolume: number }[] = [];
+let currentChoice: { id: number; elecVolume: number } = { id: 0, elecVolume: 0 };
 function init() {
   // @ts-ignore
   iframe = document.getElementsByClassName('body-iframe')?.[0].contentWindow;
   iframeDocument = iframe.document;
+
+  // 检查样式是否已经注入
+  const existingStyle = iframeDocument?.getElementById('trade-choice-styles');
+  if (existingStyle) {
+    return; // 样式已存在，无需重复注入
+  }
+
+  // 创建样式元素
+  const style = iframeDocument!.createElement('style');
+  style.id = 'trade-choice-styles';
+  style.textContent = `
+    .current-choice {
+      background-color:rgb(166, 202, 255) !important;
+    }
+    .next-choice {
+      background-color: #ffc4c4 !important;
+    }
+    .prev-choice {
+      background-color:rgb(180, 249, 168) !important;
+    }
+  `;
+  // 将样式注入到 iframe 的 head 中
+  const head = iframeDocument?.head || iframeDocument?.getElementsByTagName('head')[0];
+  if (head) {
+    head.appendChild(style);
+    mainLogInfo('样式注入成功');
+  } else {
+    mainLogError('无法找到iframe的head元素');
+  }
 }
 
 export function getMCGPTableData(): BUY_DATA_ITEM[] | null {
@@ -80,6 +112,70 @@ export function getMCGPTableData(): BUY_DATA_ITEM[] | null {
   return rows;
 }
 
+async function updateChoice(currentChoiceElement: HTMLTableRowElement | null) {
+  await new Promise((resolve) => setTimeout(resolve, 5000));
+  // 处理nextChoice
+
+  prevChoice.push(currentChoice);
+  currentChoice = nextChoice[0];
+  nextChoice = nextChoice.slice(1);
+  tradeIframe();
+}
+
+export async function tradeIframe() {
+  const table = iframeDocument?.getElementById('mcgpxx');
+  if (!table) {
+    return;
+  }
+  const tbody = table.querySelector('tbody');
+  if (!tbody) {
+    return;
+  }
+  if (nextChoice.length <= 0) {
+    window.postMessage(
+      {
+        type: EXECUTION_TYPE.TRADE_END,
+      },
+      '*'
+    );
+    mainLogInfo('交易结束');
+    return;
+  }
+  const trs = tbody.querySelectorAll('tr');
+  let currentChoiceElement: HTMLTableRowElement | null = null;
+
+  trs.forEach((tr) => {
+    const tds = tr.querySelectorAll('td');
+    if (tds.length < 9) {
+      return;
+    }
+    // 从操作按钮中提取ID
+    const actionButton = tds[7].querySelector('button');
+    const actionOnclick = actionButton?.getAttribute('onclick') || '';
+    const actionIDMatch = actionOnclick.match(/wyzp\((\d+)\)/);
+    const gpid = actionIDMatch ? parseInt(actionIDMatch[1], 10) : 0;
+    tr.classList.remove('current-choice', 'prev-choice', 'next-choice');
+
+    if (gpid === currentChoice.id) {
+      tr.classList.add('current-choice');
+      currentChoiceElement = tr;
+    } else if (prevChoice.some((item) => item.id === gpid)) {
+      tr.classList.add('prev-choice');
+    } else if (nextChoice.some((item) => item.id === gpid)) {
+      tr.classList.add('next-choice');
+    }
+  });
+
+  // 滚动到 current-choice 元素
+  if (currentChoiceElement) {
+    (currentChoiceElement as HTMLTableRowElement).scrollIntoView({
+      behavior: 'smooth',
+      block: 'center',
+    });
+    updateChoice(currentChoiceElement);
+  }
+}
+
 window.addEventListener('message', (event) => {
   switch (event.data.type) {
     case EXECUTION_TYPE.INITIFRAME:
@@ -102,6 +198,17 @@ window.addEventListener('message', (event) => {
         },
         '*'
       );
+      break;
+    case EXECUTION_TYPE.CANCEL_TRADE:
+      mainLogInfo('终止交易', event.data.message);
+      break;
+    case EXECUTION_TYPE.TRADE:
+      mainLogInfo('交易', JSON.parse(event.data.message));
+      choiceSellData = JSON.parse(event.data.message);
+      currentChoice = choiceSellData[0];
+      prevChoice = [];
+      nextChoice = choiceSellData.slice(1);
+      tradeIframe();
       break;
   }
 });

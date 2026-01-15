@@ -3,8 +3,16 @@
     <div class="elec-header">
       <h2 class="elec-title">电力交易</h2>
       <div class="elec-input">
-        <!-- <el-button type="danger">终止</el-button> -->
-        <el-button type="primary" v-if="choiceSellData.length > 0" @click="handleTradeClick"
+        <el-button
+          type="danger"
+          v-if="tradeStatus === TRADE_STATUS.TRADE"
+          @click="handleCancelClick"
+          >终止</el-button
+        >
+        <el-button
+          type="primary"
+          v-if="choiceSellData.length > 0 && tradeStatus === TRADE_STATUS.DISPLAY"
+          @click="handleTradeClick"
           >交易</el-button
         >
         <el-input v-model="electricityVolume" placeholder="拟交易电量" style="width: 280px">
@@ -44,11 +52,14 @@ import 'element-plus/theme-chalk/el-checkbox.css';
 import 'element-plus/theme-chalk/el-table-v2.css';
 import { computed, h, ref } from 'vue';
 import { CheckboxValueType, ElCheckbox, ElMessageBox } from 'element-plus';
+import { TRADE_STATUS } from '@/constants';
 
 const electricityVolume = ref(0);
+const emits = defineEmits(['trade', 'cancel']);
 const props = defineProps<{
   diaelecHeight?: number;
   data: SELL_DATA_ITEM[];
+  tradeStatus: string;
 }>();
 
 const choiceSellData = ref<number[]>([]);
@@ -74,8 +85,9 @@ const columns = ref<any>([
         modelValue: choiceSellData.value.includes(rowData.gpid),
         key: rowData.gpid,
         disabled:
-          choiceSellDataTotal.value >= electricityVolume.value &&
-          !choiceSellData.value.includes(rowData.gpid),
+          (choiceSellDataTotal.value >= electricityVolume.value &&
+            !choiceSellData.value.includes(rowData.gpid)) ||
+          props.tradeStatus === TRADE_STATUS.TRADE,
         onChange: (value: CheckboxValueType) => {
           if (value) {
             choiceSellData.value = [...choiceSellData.value, rowData.gpid];
@@ -91,6 +103,7 @@ const columns = ref<any>([
           choiceSellDataTotal.value >= electricityVolume.value && choiceSellDataTotal.value > 0,
         indeterminate:
           choiceSellDataTotal.value > 0 && choiceSellDataTotal.value < electricityVolume.value,
+        disabled: props.tradeStatus === TRADE_STATUS.TRADE,
         onChange: (value: CheckboxValueType) => {
           if (value) {
             let index = 0;
@@ -161,10 +174,44 @@ const columns = ref<any>([
 ]);
 
 const handleTradeClick = async () => {
-  await ElMessageBox.confirm('确定要交易吗？', '提示', {
+  await ElMessageBox.confirm(
+    `确定要交易吗？拟交易电量：${
+      electricityVolume.value
+    }kWh，交易挂牌id：${choiceSellData.value.join(',')}`,
+    '提示',
+    {
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+    }
+  );
+  let tradeData: { id: number; elecVolume: number }[] = [];
+  let currentVolume = 0;
+  viewData.value.forEach((item) => {
+    if (choiceSellData.value.includes(item.gpid)) {
+      if (currentVolume + item.sydl <= electricityVolume.value) {
+        currentVolume += item.sydl;
+        tradeData.push({
+          id: item.gpid,
+          elecVolume: item.sydl,
+        });
+      } else {
+        tradeData.push({
+          id: item.gpid,
+          elecVolume: electricityVolume.value - currentVolume,
+        });
+      }
+    }
+  });
+
+  emits('trade', tradeData);
+};
+
+const handleCancelClick = async () => {
+  await ElMessageBox.confirm(`确定要终止交易吗？`, '提示', {
     confirmButtonText: '确定',
     cancelButtonText: '取消',
   });
+  emits('cancel');
 };
 </script>
 <style scoped lang="scss">
