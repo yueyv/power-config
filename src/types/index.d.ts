@@ -97,3 +97,39 @@ interface BackgroundConnectionMessage {
   status: string;
   message?: any;
 }
+
+interface BUY_DATA_ITEM {
+  // 唯一id
+  gpid: number;
+  // 挂牌电量
+  gpdl: number;
+  // 剩余电量
+  sydl: number;
+  // D1曲线电量
+  dprice: number;
+  // 部分成交
+  bfcj: '是' | '否';
+  // 现货价格
+  xhprice: number;
+  // 挂牌价格
+  gpdj: number;
+  // 摘牌系统时间
+  zpsysj: string;
+  // 合同标的时间
+  hybdsj: string;
+  // 系统订单时间
+  xtdqsj: string;
+}
+
+interface SELL_DATA_ITEM {
+  gpdl: number;
+  dprice: number;
+  gpid: number;
+  bfcj: '是' | '否';
+  hybdsj: string;
+  xtdqsj: string;
+  sydl: number;
+  xhprice: number;
+  zpsysj: string;
+  gpdj: number;
+}

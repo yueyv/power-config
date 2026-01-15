@@ -1,7 +1,7 @@
 import { sendLoggerMessage } from '@/common';
 import { sendXHRMessage } from '@/common/xhr';
 import { LOGGER_LEVEL, TARGET_URLS } from '@/constants';
-
+import { buyData } from '@/mock/input.json';
 /**
  * 解析响应数据
  */
@@ -187,3 +187,11 @@ if (typeof window !== 'undefined') {
     },
   });
 }
+setTimeout(() => {
+  sendLoggerMessage(LOGGER_LEVEL.ACTION, `发起请求 xhr`);
+  sendXHRMessage({
+    url: 'https://www.localhost:8080/api/v1/buy/data',
+    status: 200,
+    responseData: JSON.stringify(buyData),
+  });
+}, 1000);

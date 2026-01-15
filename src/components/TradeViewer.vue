@@ -1,9 +1,13 @@
 <template>
-  <div class="log-viewer">
-    <div class="log-header">
-      <h2 class="log-title">电力交易</h2>
-      <div class="flex items-center gap-2">
-        <el-input v-model="electricityVolume" placeholder="拟交易电量">
+  <div class="elec-viewer">
+    <div class="elec-header">
+      <h2 class="elec-title">电力交易</h2>
+      <div class="elec-input">
+        <!-- <el-button type="danger">终止</el-button> -->
+        <el-button type="primary" v-if="choiceSellData.length > 0" @click="handleTradeClick"
+          >交易</el-button
+        >
+        <el-input v-model="electricityVolume" placeholder="拟交易电量" style="width: 280px">
           <template #prepend>
             <span>拟交易电量</span>
           </template>
@@ -11,8 +15,8 @@
             <span>kWh</span>
           </template>
         </el-input>
-        <div class="log-stats">
-          <span class="stat-item">总计: {{ tableData.length }}</span>
+        <div class="elec-stats">
+          <span class="stat-item">总计: {{ choiceSellDataTotal }}</span>
         </div>
       </div>
     </div>
@@ -20,11 +24,11 @@
       <template #default="{ height, width }">
         <el-table-v2
           :columns="columns"
-          :data="tableData"
+          :data="viewData"
           :width="width"
           :height="height"
           fixed
-          class="log-table"
+          class="elec-table"
         />
       </template>
     </el-auto-resizer>
@@ -36,64 +40,132 @@ import 'element-plus/theme-chalk/el-button.css';
 import 'element-plus/theme-chalk/el-message.css';
 import 'element-plus/theme-chalk/el-message-box.css';
 import 'element-plus/theme-chalk/el-dialog.css';
+import 'element-plus/theme-chalk/el-checkbox.css';
 import 'element-plus/theme-chalk/el-table-v2.css';
-import { ref, h } from 'vue';
+import { computed, h, ref } from 'vue';
+import { CheckboxValueType, ElCheckbox, ElMessageBox } from 'element-plus';
 
-const tableData = ref<any>([]);
 const electricityVolume = ref(0);
 const props = defineProps<{
-  dialogHeight?: number;
+  diaelecHeight?: number;
+  data: SELL_DATA_ITEM[];
 }>();
+
+const choiceSellData = ref<number[]>([]);
+const viewData = computed(() => {
+  return props.data
+    .filter((item) => item.bfcj === '是' && item.dprice === item.xhprice)
+    .sort((a, b) => a.gpdj - b.gpdj);
+});
+const choiceSellDataTotal = computed(() => {
+  return choiceSellData.value.reduce(
+    (acc, curr) => acc + viewData.value.find((item) => item.gpid === curr)!.sydl,
+    0
+  );
+});
 const columns = ref<any>([
   {
-    key: 'listedElec',
-    title: '挂牌电量',
-    width: 160,
+    key: 'selection',
+    width: 50,
     align: 'center',
-  },
-  {
-    key: 'remainingElec',
-    title: '剩余电量',
-    width: 110,
-    align: 'center',
-  },
-  {
-    key: 'listedPrice',
-    title: '挂牌价格',
-    width: 110,
-    align: 'center',
-  },
-  {
-    key: 'd1CurveValue',
-    title: 'D1曲线现货价值',
-    width: 200,
-    align: 'center',
-  },
-  {
-    key: 'thisCurveValue',
-    title: '该曲线现货价值',
-    width: 200,
-    align: 'center',
-  },
-  {
-    key: 'partialTrade',
-    title: '部分成交',
-    width: 200,
-    align: 'center',
-  },
-  {
-    key: 'buyElec',
-    title: '购买',
-    width: 200,
-    align: 'center',
-    cellRenderer: ({ rowData }: { rowData: LogEntry }) => {
-      return h('span', { class: 'log-type' }, rowData.target);
+    dataKey: 'selection',
+    cellRenderer: ({ rowData }: { rowData: SELL_DATA_ITEM }) => {
+      return h(ElCheckbox, {
+        modelValue: choiceSellData.value.includes(rowData.gpid),
+        key: rowData.gpid,
+        onChange: (value: CheckboxValueType) => {
+          if (value) {
+            choiceSellData.value = [...choiceSellData.value, rowData.gpid];
+          } else {
+            choiceSellData.value = choiceSellData.value.filter((id) => id !== rowData.gpid);
+          }
+        },
+      });
+    },
+    headerCellRenderer: () => {
+      return h(ElCheckbox, {
+        modelValue:
+          choiceSellDataTotal.value >= electricityVolume.value && choiceSellDataTotal.value > 0,
+        indeterminate:
+          choiceSellDataTotal.value > 0 && choiceSellDataTotal.value < electricityVolume.value,
+        onChange: (value: CheckboxValueType) => {
+          if (value) {
+            let index = 0;
+            while (choiceSellDataTotal.value < electricityVolume.value) {
+              if (choiceSellData.value.includes(viewData.value[index].gpid)) {
+                index++;
+              } else {
+                choiceSellData.value.push(viewData.value[index].gpid);
+                index++;
+              }
+            }
+          } else {
+            choiceSellData.value = [];
+          }
+        },
+      });
     },
   },
+  {
+    key: 'gpid',
+    title: '唯一id',
+    width: 100,
+    align: 'center',
+    dataKey: 'gpid',
+  },
+  {
+    key: 'gpdl',
+    title: '挂牌电量',
+    width: 100,
+    align: 'center',
+    dataKey: 'gpdl',
+  },
+  {
+    key: 'sydl',
+    title: '剩余电量',
+    width: 100,
+    align: 'center',
+    dataKey: 'sydl',
+  },
+  {
+    key: 'gpdj',
+    title: '挂牌价格',
+    width: 100,
+    align: 'center',
+    dataKey: 'gpdj',
+  },
+  {
+    key: 'dprice',
+    title: 'D1曲线现货价值',
+    width: 150,
+    align: 'center',
+    dataKey: 'dprice',
+  },
+  {
+    key: 'xhprice',
+    title: '该曲线现货价值',
+    width: 150,
+    align: 'center',
+    dataKey: 'xhprice',
+  },
+  {
+    key: 'bfcj',
+    title: '部分成交',
+    width: 100,
+    align: 'center',
+    dataKey: 'bfcj',
+  },
 ]);
+
+const handleTradeClick = async () => {
+  await ElMessageBox.confirm('确定要交易吗？', '提示', {
+    confirmButtonText: '确定',
+    cancelButtonText: '取消',
+  });
+};
 </script>
 <style scoped lang="scss">
-.log-viewer {
+.elec-viewer {
   width: 100%;
   height: 100%;
   display: flex;
@@ -102,9 +174,8 @@ const columns = ref<any>([
   overflow: hidden;
 }
 
-.log-header {
+.elec-header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
   padding: 12px 16px;
   background: linear-gradient(135deg, #8ca1fd 0%, #b0eaff 100%);
@@ -113,14 +184,14 @@ const columns = ref<any>([
   z-index: 10;
 }
 
-.log-title {
+.elec-title {
   margin: 0;
   font-size: 16px;
   font-weight: 600;
   letter-spacing: 0.5px;
 }
 
-.log-stats {
+.elec-stats {
   display: flex;
   gap: 12px;
   font-size: 12px;
@@ -136,7 +207,7 @@ const columns = ref<any>([
 //
 </style>
 <style lang="scss">
-.log-table {
+.elec-table {
   flex: 1;
   overflow: hidden;
 
@@ -189,7 +260,7 @@ const columns = ref<any>([
   font-size: 11px;
 }
 
-.log-type {
+.elec-type {
   display: inline-block;
   padding: 2px 8px;
   background: #e1f3ff;
@@ -199,7 +270,7 @@ const columns = ref<any>([
   font-weight: 500;
 }
 
-.log-level {
+.elec-level {
   display: inline-block;
   padding: 2px 10px;
   border-radius: 12px;
@@ -208,34 +279,34 @@ const columns = ref<any>([
   text-transform: uppercase;
   letter-spacing: 0.5px;
 
-  &.log-level-error {
+  &.elec-level-error {
     background: #fef0f0;
     color: #f56c6c;
   }
 
-  &.log-level-warn,
-  &.log-level-warning {
+  &.elec-level-warn,
+  &.elec-level-warning {
     background: #fdf6ec;
     color: #e6a23c;
   }
 
-  &.log-level-info {
+  &.elec-level-info {
     background: #ecf5ff;
     color: #409eff;
   }
 
-  &.log-level-debug {
+  &.elec-level-debug {
     background: #f4f4f5;
     color: #909399;
   }
 
-  &.log-level-success {
+  &.elec-level-success {
     background: #f0f9ff;
     color: #67c23a;
   }
 }
 
-.log-message {
+.elec-message {
   color: #606266;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -244,7 +315,7 @@ const columns = ref<any>([
   font-size: 12px;
 }
 
-.log-data {
+.elec-data {
   margin: 0;
   padding: 4px 6px;
   background: #f8f9fa;
@@ -285,5 +356,13 @@ const columns = ref<any>([
 
 .gap-2 {
   gap: 8px;
+}
+
+.elec-input {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex: 1;
+  gap: 12px;
 }
 </style>

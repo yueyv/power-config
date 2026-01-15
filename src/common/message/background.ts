@@ -1,8 +1,15 @@
-import { BACKGROUND_CONTENT_CONNECTION_NAME, CONNECT_STATUS, XHR_PORT_NAME } from '@/constants';
+import {
+  BACKGROUND_CONTENT_CONNECTION_NAME,
+  CONNECT_STATUS,
+  LOGGER_LEVEL,
+  XHR_PORT_NAME,
+} from '@/constants';
+import { setLogger } from '@/model/log';
+import { setSellData } from '@/model/sellData';
 export default function useBackgroundConnection() {
   // 连接池：使用 Map 存储所有连接，key 是 tabId，value 是 port
   const contentPorts = new Map<number, chrome.runtime.Port>();
-
+  // 创建连接
   chrome.runtime.onConnect.addListener((port) => {
     if (port.name === BACKGROUND_CONTENT_CONNECTION_NAME) {
       // 获取连接的标签页 ID
@@ -46,26 +53,15 @@ export default function useBackgroundConnection() {
       }
     }
   });
-
+  // 监听消息
   chrome.runtime.onMessage.addListener((message, sender) => {
     const tabId = sender?.tab?.id;
     if (message.type === XHR_PORT_NAME && tabId) {
       console.log('Background 收到消息:', message.message);
-      chrome.alarms
-        .create(CONNECT_STATUS.CLICK_EVENT, {
-          when: Date.now() + 5000,
-        })
-        .then(() => {
-          sendMessageToContent(tabId, {
-            status: CONNECT_STATUS.CLICK_EVENT,
-          });
-        })
-        .catch((err) => {
-          console.error('Failed to create alarm:', err);
-        });
+      setLogger(LOGGER_LEVEL.ACTION, 'background', '收到xhr消息', message.message);
+      setSellData(JSON.parse(message.message.responseData));
     }
   });
-
   /**
    * 向所有连接的 content script 广播消息
    */

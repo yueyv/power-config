@@ -37,3 +37,14 @@ export const DOMAIN = '*';
  * 默认最大日志数量
  */
 export const DEFAULT_MAX_LOGS = 1000;
+
+export const SELL_DATA_KEY = 'sellData';
+
+export const CHOICE_SELL_DATA_KEY = 'choiceSellData';
+
+export enum TRADE_STATUS {
+  DISPLAY = 'display',
+  TRADE = 'trade',
+  CANNEL = 'cannel',
+  COMPLETE = 'complete',
+}

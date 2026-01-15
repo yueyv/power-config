@@ -2,8 +2,6 @@ import { createApp } from 'vue';
 import App from './views/App.vue';
 import '@/assets/style/reset.scss';
 import 'virtual:uno.css';
-import { initContentScript } from '@/common/message/content';
-import './background';
 
 /**
  * Mount the Vue app to the DOM.
@@ -17,7 +15,6 @@ function mountApp() {
   document.body.appendChild(container);
   const app = createApp(App);
   app.mount(container);
-  initContentScript();
 }
 
 mountApp();
