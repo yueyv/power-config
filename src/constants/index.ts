@@ -59,6 +59,7 @@ export enum EXECUTION_TYPE {
   LOG_INFO = 'log_info',
   GET_SELL_DATA = 'get_sell_data',
   TRADE = 'trade',
+  TRADE_ERROR = 'trade_error',
   CANCEL_TRADE = 'cancel_trade',
   TRADE_END = 'trade_end',
   NEXT_CHOICE = 'next_choice',

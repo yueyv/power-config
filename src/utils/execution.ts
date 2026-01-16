@@ -144,17 +144,7 @@ export async function tradeIframe() {
   if (!tbody) {
     return;
   }
-  if (nextChoice.length <= 0) {
-    window.postMessage(
-      {
-        type: EXECUTION_TYPE.TRADE_END,
-        message: JSON.stringify(currentChoice),
-      },
-      '*'
-    );
-    mainLogInfo('交易结束');
-    return;
-  }
+
   const trs = tbody.querySelectorAll('tr');
   let currentChoiceElement: HTMLTableRowElement | null = null;
 
@@ -179,7 +169,17 @@ export async function tradeIframe() {
       tr.classList.add('next-choice');
     }
   });
-
+  if (nextChoice.length <= 0) {
+    window.postMessage(
+      {
+        type: EXECUTION_TYPE.TRADE_END,
+        message: JSON.stringify(currentChoice),
+      },
+      '*'
+    );
+    mainLogInfo('交易结束');
+    return;
+  }
   // 滚动到 current-choice 元素
   if (currentChoiceElement) {
     (currentChoiceElement as HTMLTableRowElement).scrollIntoView({
