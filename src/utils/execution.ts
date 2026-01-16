@@ -131,6 +131,7 @@ export async function tradeIframe() {
   if (!tbody) {
     return;
   }
+  console.log('nextChoice', nextChoice);
   if (nextChoice.length <= 0) {
     window.postMessage(
       {

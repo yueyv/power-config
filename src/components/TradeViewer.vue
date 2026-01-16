@@ -80,7 +80,7 @@ const viewData = computed(() => {
 });
 const choiceSellDataTotal = computed(() => {
   return choiceSellData.value.reduce(
-    (acc, curr) => acc + viewData.value.find((item) => item.gpid === curr)!.sydl,
+    (acc, curr) => acc + (viewData.value.find((item) => item.gpid === curr)?.sydl || 0),
     0
   );
 });

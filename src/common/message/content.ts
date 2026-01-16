@@ -4,7 +4,7 @@ import { SCRIPT_LOGGER_PORT_NAME } from '@/constants';
 import { receiveLoggerMessage } from '../log';
 import { BACKGROUND_CONTENT_CONNECTION_NAME, CONNECT_STATUS } from '@/constants';
 import { ref } from 'vue';
-import { logInfo } from '@/model/log';
+import { logAction, logInfo } from '@/model/log';
 import {
   getChoiceSellData,
   getSellDataStatus,
@@ -12,29 +12,13 @@ import {
   setSellData,
   setSellDataStatus,
 } from '@/model/sellData';
+import { ElMessageBox } from 'element-plus';
 
 export function useBackgroundConnection() {
   const backgroundConnection = chrome.runtime.connect({ name: BACKGROUND_CONTENT_CONNECTION_NAME });
   const tradeStatus = ref<string>(TRADE_STATUS.DISPLAY);
   const sellData = ref<SELL_DATA_ITEM[]>([]);
-  getSellDataStatus().then((status: string | undefined) => {
-    if (status) {
-      tradeStatus.value = status;
-    }
-    if (status === TRADE_STATUS.TRADE) {
-      initIframe();
-      console.log('TRADE_STATUS.TRADE');
-      getChoiceSellData().then((data: CHOICE_SELL_DATA) => {
-        window.postMessage(
-          {
-            type: EXECUTION_TYPE.TRADE,
-            message: JSON.stringify(data),
-          },
-          '*'
-        );
-      });
-    }
-  });
+
   // 监听消息
   backgroundConnection.onMessage.addListener((msg) => {
     switch (msg.status) {
@@ -125,20 +109,52 @@ export function useBackgroundConnection() {
       },
       '*'
     );
+    getSellDataStatus().then(async (status: string | undefined) => {
+      if (status) {
+        tradeStatus.value = status;
+      }
+      if (status === TRADE_STATUS.TRADE) {
+        await ElMessageBox.confirm('交易中，是否继续交易？', '提示', {
+          confirmButtonText: '确定',
+          cancelButtonText: '取消',
+        })
+          .then((result) => {
+            logAction('content', '交易中，继续交易');
+            getChoiceSellData().then((data: CHOICE_SELL_DATA) => {
+              window.postMessage(
+                {
+                  type: EXECUTION_TYPE.TRADE,
+                  message: JSON.stringify(data),
+                },
+                '*'
+              );
+            });
+          })
+          .catch(() => {
+            logAction('content', '交易中，终止交易');
+            tradeStatus.value = TRADE_STATUS.DISPLAY;
+          });
+      }
+      if (status === TRADE_STATUS.COMPLETE) {
+        tradeStatus.value = TRADE_STATUS.DISPLAY;
+        setSellDataStatus(tradeStatus.value);
+      }
+    });
   }
 
   function tradeIframe(data: { id: number; elecVolume: number }[]) {
     tradeStatus.value = TRADE_STATUS.TRADE;
     setSellDataStatus(tradeStatus.value);
-    setChoiceSellData({
+    const choiceSellData: CHOICE_SELL_DATA = {
       prevChoice: [],
       currentChoice: data[0],
       nextChoice: data.slice(1),
-    });
+    };
+    setChoiceSellData(choiceSellData);
     window.postMessage(
       {
         type: EXECUTION_TYPE.TRADE,
-        message: JSON.stringify(data),
+        message: JSON.stringify(choiceSellData),
       },
       '*'
     );
