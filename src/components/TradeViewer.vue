@@ -11,13 +11,25 @@
         >
         <el-button
           type="primary"
+          v-if="tradeStatus === TRADE_STATUS.CANCEL_TRADE"
+          @click="handleContinueClick"
+          >继续</el-button
+        >
+        <el-button
+          type="primary"
           v-if="choiceSellData.length > 0 && tradeStatus === TRADE_STATUS.DISPLAY"
           @click="handleTradeClick"
           >交易</el-button
         >
+        <el-button
+          type="primary"
+          v-if="tradeStatus === TRADE_STATUS.COMPLETE || tradeStatus === TRADE_STATUS.CANCEL_TRADE"
+          @click="handleResetClick"
+          >重置</el-button
+        >
         <el-input
           v-model="electricityVolume"
-          :disabled="tradeStatus === TRADE_STATUS.TRADE"
+          :disabled="tradeStatus === TRADE_STATUS.TRADE || tradeStatus === TRADE_STATUS.COMPLETE"
           placeholder="拟交易电量"
           style="width: 280px"
         >
@@ -29,7 +41,13 @@
           </template>
         </el-input>
         <div class="elec-stats">
-          <span class="stat-item">总计: {{ choiceSellDataTotal }}</span>
+          <span class="stat-item" v-if="tradeStatus === TRADE_STATUS.DISPLAY"
+            >总计:
+            {{
+              choiceSellDataTotal < electricityVolume ? choiceSellDataTotal : electricityVolume
+            }}</span
+          >
+          <span class="stat-item" v-else>实际购买量: {{ actualElectricityVolume }}</span>
         </div>
       </div>
     </div>
@@ -65,11 +83,12 @@ import {
 } from '@/model/sellData';
 
 const electricityVolume = ref(0);
-const emits = defineEmits(['trade', 'cancel']);
+const emits = defineEmits(['trade', 'cancel', 'reset', 'continue']);
 const props = defineProps<{
   diaelecHeight?: number;
   data: SELL_DATA_ITEM[];
   tradeStatus: string;
+  actualElectricityVolume: number;
 }>();
 
 const choiceSellData = ref<number[]>([]);
@@ -97,7 +116,7 @@ const columns = ref<any>([
         disabled:
           (choiceSellDataTotal.value >= electricityVolume.value &&
             !choiceSellData.value.includes(rowData.gpid)) ||
-          props.tradeStatus === TRADE_STATUS.TRADE,
+          props.tradeStatus !== TRADE_STATUS.DISPLAY,
         onChange: (value: CheckboxValueType) => {
           if (value) {
             choiceSellData.value = [...choiceSellData.value, rowData.gpid];
@@ -113,7 +132,7 @@ const columns = ref<any>([
           choiceSellDataTotal.value >= electricityVolume.value && choiceSellDataTotal.value > 0,
         indeterminate:
           choiceSellDataTotal.value > 0 && choiceSellDataTotal.value < electricityVolume.value,
-        disabled: props.tradeStatus === TRADE_STATUS.TRADE,
+        disabled: props.tradeStatus !== TRADE_STATUS.DISPLAY,
         onChange: (value: CheckboxValueType) => {
           if (value) {
             let index = 0;
@@ -222,6 +241,14 @@ const handleCancelClick = async () => {
     cancelButtonText: '取消',
   });
   emits('cancel');
+};
+
+const handleContinueClick = () => {
+  emits('continue');
+};
+
+const handleResetClick = () => {
+  emits('reset');
 };
 
 onMounted(() => {

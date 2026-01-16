@@ -18,6 +18,7 @@ export function useBackgroundConnection() {
   const backgroundConnection = chrome.runtime.connect({ name: BACKGROUND_CONTENT_CONNECTION_NAME });
   const tradeStatus = ref<string>(TRADE_STATUS.DISPLAY);
   const sellData = ref<SELL_DATA_ITEM[]>([]);
+  const actualElectricityVolume = ref<number>(0);
 
   // 监听消息
   backgroundConnection.onMessage.addListener((msg) => {
@@ -72,13 +73,11 @@ export function useBackgroundConnection() {
         setSellData(sellData.value);
         break;
       case EXECUTION_TYPE.NEXT_CHOICE:
-        const choiceSellData: CHOICE_SELL_DATA = await getChoiceSellData();
-        choiceSellData.prevChoice.push(choiceSellData.currentChoice);
-        choiceSellData.currentChoice = choiceSellData.nextChoice[0];
-        choiceSellData.nextChoice = choiceSellData.nextChoice.slice(1);
-        setChoiceSellData(choiceSellData);
-        logInfo('content', '完成选择', choiceSellData);
-        // todo 需要记录选择的数据的实际购买电量
+        const choiceSellData: CHOICE_SELL_DATA = await updateTradeData(
+          JSON.parse(event.data.message)
+        );
+        logInfo('content', '完成选择', event.data.message);
+        // 实际供电量在prevChoice中
         window.postMessage(
           {
             type: EXECUTION_TYPE.TRADE,
@@ -89,6 +88,7 @@ export function useBackgroundConnection() {
         break;
       case EXECUTION_TYPE.TRADE_END:
         tradeStatus.value = TRADE_STATUS.COMPLETE;
+        updateTradeData(JSON.parse(event.data.message));
         setSellDataStatus(tradeStatus.value);
         logInfo('content', '交易结束');
         break;
@@ -121,6 +121,10 @@ export function useBackgroundConnection() {
           .then((result) => {
             logAction('content', '交易中，继续交易');
             getChoiceSellData().then((data: CHOICE_SELL_DATA) => {
+              actualElectricityVolume.value += data.prevChoice.reduce(
+                (acc, curr) => acc + curr.elecVolume,
+                0
+              );
               window.postMessage(
                 {
                   type: EXECUTION_TYPE.TRADE,
@@ -133,13 +137,23 @@ export function useBackgroundConnection() {
           .catch(() => {
             logAction('content', '交易中，终止交易');
             tradeStatus.value = TRADE_STATUS.DISPLAY;
+            setSellDataStatus(tradeStatus.value);
           });
       }
-      if (status === TRADE_STATUS.COMPLETE) {
-        tradeStatus.value = TRADE_STATUS.DISPLAY;
-        setSellDataStatus(tradeStatus.value);
-      }
     });
+  }
+
+  async function updateTradeData(data: { id: number; elecVolume: number }) {
+    const choiceSellData: CHOICE_SELL_DATA = await getChoiceSellData();
+    choiceSellData.prevChoice.push(data);
+    actualElectricityVolume.value = choiceSellData.prevChoice.reduce(
+      (acc, curr) => acc + curr.elecVolume,
+      0
+    );
+    choiceSellData.currentChoice = choiceSellData.nextChoice[0];
+    choiceSellData.nextChoice = choiceSellData.nextChoice.slice(1);
+    setChoiceSellData(choiceSellData);
+    return choiceSellData;
   }
 
   function tradeIframe(data: { id: number; elecVolume: number }[]) {
@@ -161,7 +175,7 @@ export function useBackgroundConnection() {
   }
 
   function cancelTradeIframe() {
-    tradeStatus.value = TRADE_STATUS.DISPLAY;
+    tradeStatus.value = TRADE_STATUS.CANCEL_TRADE;
     setSellDataStatus(tradeStatus.value);
     window.postMessage(
       {
@@ -171,6 +185,23 @@ export function useBackgroundConnection() {
     );
   }
 
+  function resetTradeIframe() {
+    tradeStatus.value = TRADE_STATUS.DISPLAY;
+    setSellDataStatus(tradeStatus.value);
+  }
+
+  async function continueTradeIframe() {
+    tradeStatus.value = TRADE_STATUS.TRADE;
+    setSellDataStatus(tradeStatus.value);
+    const choiceSellData: CHOICE_SELL_DATA = await getChoiceSellData();
+    window.postMessage(
+      {
+        type: EXECUTION_TYPE.TRADE,
+        message: JSON.stringify(choiceSellData),
+      },
+      '*'
+    );
+  }
   return {
     sendMessageToBackground,
     initIframe,
@@ -178,5 +209,8 @@ export function useBackgroundConnection() {
     tradeStatus,
     tradeIframe,
     cancelTradeIframe,
+    resetTradeIframe,
+    actualElectricityVolume,
+    continueTradeIframe,
   };
 }

@@ -6,7 +6,10 @@
     :style="affixStyle"
     @mousedown="handleMouseDown"
   >
-    <div class="affix-icon" v-if="tradeStatus === TRADE_STATUS.DISPLAY">
+    <div
+      class="affix-icon"
+      v-if="tradeStatus === TRADE_STATUS.DISPLAY || tradeStatus === TRADE_STATUS.CANCEL_TRADE"
+    >
       <svg
         xmlns="http://www.w3.org/2000/svg"
         viewBox="0 0 24 24"

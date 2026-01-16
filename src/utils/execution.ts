@@ -5,6 +5,7 @@ let iframeDocument: Document | undefined = undefined;
 let prevChoice: { id: number; elecVolume: number }[] = [];
 let nextChoice: { id: number; elecVolume: number }[] = [];
 let currentChoice: { id: number; elecVolume: number } = { id: 0, elecVolume: 0 };
+let isTrade = false;
 function init() {
   // @ts-ignore
   iframe = document.getElementsByClassName('body-iframe')?.[0].contentWindow;
@@ -113,10 +114,22 @@ export function getMCGPTableData(): BUY_DATA_ITEM[] | null {
 
 async function updateChoice(currentChoiceElement: HTMLTableRowElement | null) {
   await new Promise((resolve) => setTimeout(resolve, 5000));
+  console.log('currentChoice', {
+    currentChoice,
+    prevChoice,
+    nextChoice,
+    isTrade,
+  });
   // 处理nextChoice
+  if (!isTrade) {
+    return;
+  }
+  currentChoiceElement?.classList.remove('current-choice');
+  currentChoiceElement?.classList.add('prev-choice');
   window.postMessage(
     {
       type: EXECUTION_TYPE.NEXT_CHOICE,
+      message: JSON.stringify(currentChoice),
     },
     '*'
   );
@@ -131,11 +144,11 @@ export async function tradeIframe() {
   if (!tbody) {
     return;
   }
-  console.log('nextChoice', nextChoice);
   if (nextChoice.length <= 0) {
     window.postMessage(
       {
         type: EXECUTION_TYPE.TRADE_END,
+        message: JSON.stringify(currentChoice),
       },
       '*'
     );
@@ -201,13 +214,12 @@ window.addEventListener('message', (event) => {
       );
       break;
     case EXECUTION_TYPE.CANCEL_TRADE:
+      isTrade = false;
       mainLogInfo('终止交易', event.data.message);
-      prevChoice = [];
-      nextChoice = [];
-      currentChoice = { id: 0, elecVolume: 0 };
-      tradeIframe();
+
       break;
     case EXECUTION_TYPE.TRADE:
+      isTrade = true;
       mainLogInfo('交易', JSON.parse(event.data.message));
       const choiceSellData: CHOICE_SELL_DATA = JSON.parse(event.data.message);
       currentChoice = choiceSellData.currentChoice;

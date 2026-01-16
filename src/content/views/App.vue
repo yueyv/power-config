@@ -1,13 +1,16 @@
 <template>
   <el-config-provider :locale="zhCn">
     <Affix @choose="handleClick" :trade-status="tradeStatus"> </Affix>
-    <el-dialog v-model="visible" width="840px">
+    <el-dialog v-model="visible" width="840px" draggable>
       <trade-viewer
         class="h-60"
         :data="sellData"
         :trade-status="tradeStatus"
+        :actual-electricity-volume="actualElectricityVolume"
         @trade="handleTrade"
         @cancel="handleCancel"
+        @reset="handleReset"
+        @continue="handleContinue"
       />
     </el-dialog>
   </el-config-provider>
@@ -15,14 +18,21 @@
 
 <script setup lang="ts">
 import zhCn from 'element-plus/es/locale/lang/zh-cn';
-import { ref } from 'vue';
+import { onMounted, ref } from 'vue';
 import { useBackgroundConnection } from '@/common/message/content';
-const { sellData, initIframe, tradeIframe, tradeStatus, cancelTradeIframe } =
-  useBackgroundConnection();
+const {
+  sellData,
+  initIframe,
+  tradeIframe,
+  tradeStatus,
+  cancelTradeIframe,
+  resetTradeIframe,
+  actualElectricityVolume,
+  continueTradeIframe,
+} = useBackgroundConnection();
 const visible = ref(false);
 const handleClick = () => {
   visible.value = true;
-  initIframe();
 };
 const handleTrade = (data: { id: number; elecVolume: number }[]) => {
   tradeIframe(data);
@@ -33,6 +43,15 @@ const handleTrade = (data: { id: number; elecVolume: number }[]) => {
 const handleCancel = () => {
   cancelTradeIframe();
 };
+const handleReset = () => {
+  resetTradeIframe();
+};
+const handleContinue = () => {
+  continueTradeIframe();
+};
+onMounted(() => {
+  initIframe();
+});
 </script>
 <style scoped lang="scss">
 .h-60 {

@@ -18,7 +18,7 @@ export default defineManifest({
   content_scripts: [
     {
       js: ['src/content/main.ts'],
-      matches: ['http://*/*'],
+      matches: ['http://*/*', 'https://*/*'],
     },
     // {
     //   js: ['src/utils/xhrInject.ts'],
@@ -38,7 +38,7 @@ export default defineManifest({
     // },
     {
       js: ['src/utils/execution.ts'],
-      matches: ['http://*/*'],
+      matches: ['http://*/*', 'https://*/*'],
       match_about_blank: true,
       run_at: 'document_end',
       world: 'MAIN',
