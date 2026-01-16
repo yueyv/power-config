@@ -1,6 +1,6 @@
 import { EXECUTION_TYPE } from '@/constants';
-import { mainLogError, mainLogInfo } from '@/model/log';
-let iframe = undefined;
+import { mainLogError, mainLogInfo, mainLogWarn } from '@/model/log';
+let iframe: Window | undefined = undefined;
 let iframeDocument: Document | undefined = undefined;
 let prevChoice: { id: number; elecVolume: number }[] = [];
 let nextChoice: { id: number; elecVolume: number }[] = [];
@@ -9,7 +9,7 @@ let isTrade = false;
 function init() {
   // @ts-ignore
   iframe = document.getElementsByClassName('body-iframe')?.[0].contentWindow;
-  iframeDocument = iframe.document;
+  iframeDocument = iframe?.document;
 
   // 检查样式是否已经注入
   const existingStyle = iframeDocument?.getElementById('trade-choice-styles');
@@ -112,20 +112,274 @@ export function getMCGPTableData(): BUY_DATA_ITEM[] | null {
   return rows;
 }
 
+/**
+ * 模拟真实的输入操作
+ * 注意：由于浏览器安全策略，isTrusted 属性始终为 false，无法绕过
+ * @param input 输入框元素
+ * @param value 要输入的值
+ * @returns 是否成功输入
+ */
+function simulateInput(input: HTMLInputElement | null, value: string | number): boolean {
+  if (!input) {
+    mainLogError('模拟输入失败：输入框元素不存在');
+    return false;
+  }
+
+  try {
+    // 确保输入框可见和可交互
+    if (input.offsetParent === null) {
+      mainLogWarn('输入框不可见，尝试滚动到元素位置');
+      input.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      // 等待滚动完成
+      return false;
+    }
+
+    // 聚焦输入框
+    input.focus();
+
+    // 触发 focus 事件
+    input.dispatchEvent(
+      new FocusEvent('focus', {
+        bubbles: true,
+        cancelable: true,
+        view: window,
+      })
+    );
+
+    // 清空现有值
+    input.value = '';
+
+    // 设置新值
+    const stringValue = String(value);
+    input.value = stringValue;
+
+    // 触发完整的输入事件序列
+    const events = [
+      // input 事件（现代浏览器主要使用这个）
+      new InputEvent('input', {
+        bubbles: true,
+        cancelable: true,
+        inputType: 'insertText',
+        data: stringValue,
+      }),
+      // change 事件（值改变时触发）
+      new Event('change', {
+        bubbles: true,
+        cancelable: true,
+      }),
+    ];
+
+    // 依次触发事件
+    events.forEach((event) => {
+      const defaultPrevented = !input.dispatchEvent(event);
+      if (defaultPrevented) {
+        mainLogWarn(`输入事件 ${event.type} 被阻止`);
+      }
+    });
+
+    // 如果输入框有 onchange 或 oninput 属性，尝试直接设置并触发
+    const onchangeAttr = input.getAttribute('onchange');
+    if (onchangeAttr && iframe) {
+      try {
+        // 在 iframe 的上下文中执行 onchange
+        if (typeof (iframe as any).eval === 'function') {
+          (iframe as any).eval(onchangeAttr);
+        }
+      } catch (error) {
+        mainLogWarn('执行 onchange 属性失败', error);
+      }
+    }
+
+    mainLogInfo(`模拟输入成功：${stringValue}`, {
+      inputId: input.id,
+      inputName: input.name,
+      inputType: input.type,
+      value: input.value,
+    });
+
+    return true;
+  } catch (error) {
+    mainLogError('模拟输入异常', error);
+    return false;
+  }
+}
+
+/**
+ * 模拟真实的鼠标点击事件
+ * 注意：由于浏览器安全策略，isTrusted 属性始终为 false，无法绕过
+ * @param element 要点击的元素
+ * @returns 是否成功触发点击
+ */
+function simulateClick(element: HTMLElement | null): boolean {
+  if (!element) {
+    mainLogError('模拟点击失败：元素不存在');
+    return false;
+  }
+
+  try {
+    // 确保元素可见和可交互
+    if (element.offsetParent === null) {
+      mainLogWarn('元素不可见，尝试滚动到元素位置');
+      element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      // 等待滚动完成
+      return false;
+    }
+
+    // 聚焦元素（如果可聚焦）
+    if (typeof (element as any).focus === 'function') {
+      (element as any).focus();
+    }
+
+    // 创建完整的鼠标事件序列，模拟真实用户交互
+    const events = [
+      // mousedown 事件
+      new MouseEvent('mousedown', {
+        bubbles: true,
+        cancelable: true,
+        view: window,
+        button: 0, // 左键
+        buttons: 1,
+      }),
+      // mouseup 事件
+      new MouseEvent('mouseup', {
+        bubbles: true,
+        cancelable: true,
+        view: window,
+        button: 0,
+        buttons: 0,
+      }),
+      // click 事件
+      new MouseEvent('click', {
+        bubbles: true,
+        cancelable: true,
+        view: window,
+        button: 0,
+        buttons: 0,
+      }),
+    ];
+
+    // 依次触发事件
+    events.forEach((event) => {
+      const defaultPrevented = !element.dispatchEvent(event);
+      if (defaultPrevented) {
+        mainLogWarn(`事件 ${event.type} 被阻止`);
+      }
+    });
+
+    // 如果元素有 onclick 属性，尝试直接执行函数调用
+    const onclickAttr = element.getAttribute('onclick');
+    if (onclickAttr && iframe) {
+      try {
+        // 提取函数名和参数（例如：wyzp(123)）
+        const onclickMatch = onclickAttr.match(/^(\w+)\(([^)]*)\)/);
+        if (onclickMatch) {
+          const funcName = onclickMatch[1];
+          const argsStr = onclickMatch[2];
+
+          // 解析参数（支持数字和字符串）
+          const args = argsStr
+            ? argsStr.split(',').map((arg) => {
+                const trimmed = arg.trim();
+                // 尝试解析为数字
+                const num = Number(trimmed);
+                return isNaN(num) ? trimmed : num;
+              })
+            : [];
+
+          // 在 iframe 的 window 对象上查找并调用函数
+          if (typeof (iframe as any)[funcName] === 'function') {
+            (iframe as any)[funcName](...args);
+            mainLogInfo(`直接调用函数：${funcName}(${args.join(', ')})`);
+          } else {
+            mainLogWarn(`函数 ${funcName} 在 iframe 中不存在`);
+          }
+        }
+      } catch (error) {
+        mainLogError('执行 onclick 属性失败', error);
+      }
+    }
+
+    // 最后尝试直接调用 click 方法（作为后备方案）
+    if (typeof element.click === 'function') {
+      element.click();
+    }
+
+    mainLogInfo(`模拟点击成功：${element.tagName}`, {
+      onclick: onclickAttr,
+      text: element.textContent?.trim(),
+    });
+
+    return true;
+  } catch (error) {
+    mainLogError('模拟点击异常', error);
+    return false;
+  }
+}
+
 async function updateChoice(currentChoiceElement: HTMLTableRowElement | null) {
-  await new Promise((resolve) => setTimeout(resolve, 5000));
+  // 等待一段时间，确保页面状态稳定
+  await new Promise((resolve) => setTimeout(resolve, 2000));
+  if (!isTrade) {
+    return;
+  }
+  const button = currentChoiceElement?.querySelector('button');
+  // 使用改进的模拟点击函数
+  const clickSuccess = simulateClick(button as HTMLElement);
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  const input = iframeDocument?.getElementById('zpdl') as HTMLInputElement;
+
+  // 先输入电量值
+  if (input && currentChoice.elecVolume > 0) {
+    const inputSuccess = simulateInput(input, currentChoice.elecVolume);
+    if (inputSuccess) {
+      mainLogInfo(`输入电量：${currentChoice.elecVolume}`, {
+        gpid: currentChoice.id,
+        elecVolume: currentChoice.elecVolume,
+      });
+      // 等待输入完成
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    } else {
+      mainLogWarn('输入电量失败，但继续执行后续流程');
+    }
+  } else {
+    mainLogWarn('未找到输入框或电量值为0', {
+      inputExists: !!input,
+      elecVolume: currentChoice.elecVolume,
+    });
+  }
+
+  if (!clickSuccess) {
+    mainLogWarn('点击操作按钮失败，但继续执行后续流程');
+  }
+
+  const ZPButtion = iframeDocument?.getElementById('qdzp') as HTMLButtonElement;
+  const ZPClickSuccess = simulateClick(ZPButtion as HTMLElement);
+  if (!ZPClickSuccess) {
+    mainLogWarn('点击摘牌按钮失败，但继续执行后续流程');
+  }
+
   console.log('currentChoice', {
     currentChoice,
     prevChoice,
     nextChoice,
     isTrade,
   });
+
   // 处理nextChoice
-  if (!isTrade) {
-    return;
-  }
+
   currentChoiceElement?.classList.remove('current-choice');
   currentChoiceElement?.classList.add('prev-choice');
+  if (nextChoice.length <= 0) {
+    window.postMessage(
+      {
+        type: EXECUTION_TYPE.TRADE_END,
+        message: JSON.stringify(currentChoice),
+      },
+      '*'
+    );
+    mainLogInfo('交易结束');
+    return;
+  }
   window.postMessage(
     {
       type: EXECUTION_TYPE.NEXT_CHOICE,
@@ -169,17 +423,7 @@ export async function tradeIframe() {
       tr.classList.add('next-choice');
     }
   });
-  if (nextChoice.length <= 0) {
-    window.postMessage(
-      {
-        type: EXECUTION_TYPE.TRADE_END,
-        message: JSON.stringify(currentChoice),
-      },
-      '*'
-    );
-    mainLogInfo('交易结束');
-    return;
-  }
+
   // 滚动到 current-choice 元素
   if (currentChoiceElement) {
     (currentChoiceElement as HTMLTableRowElement).scrollIntoView({

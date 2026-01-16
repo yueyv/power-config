@@ -261,7 +261,7 @@ onMounted(() => {
     if (data) {
       choiceSellData.value = [
         ...data.prevChoice.map((item) => item.id),
-        data.currentChoice.id,
+        data.currentChoice?.id,
         ...data.nextChoice.map((item) => item.id),
       ];
     }

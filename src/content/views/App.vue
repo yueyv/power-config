@@ -36,9 +36,7 @@ const handleClick = () => {
 };
 const handleTrade = (data: { id: number; elecVolume: number }[]) => {
   tradeIframe(data);
-  setTimeout(() => {
-    visible.value = false;
-  }, 1000);
+  visible.value = false;
 };
 const handleCancel = () => {
   cancelTradeIframe();

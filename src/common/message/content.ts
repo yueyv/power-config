@@ -77,14 +77,27 @@ export function useBackgroundConnection() {
           JSON.parse(event.data.message)
         );
         logInfo('content', '完成选择', event.data.message);
+        await ElMessageBox.confirm('确定', '提示', {
+          confirmButtonText: '确定',
+          cancelButtonText: '取消',
+        })
+          .then(() => {
+            window.postMessage(
+              {
+                type: EXECUTION_TYPE.TRADE,
+                message: JSON.stringify(choiceSellData),
+              },
+              '*'
+            );
+          })
+          .catch(() => {
+            tradeStatus.value = TRADE_STATUS.CANCEL_TRADE;
+            setSellDataStatus(tradeStatus.value);
+            logAction('content', '异常停止，终止交易');
+          });
+
         // 实际供电量在prevChoice中
-        window.postMessage(
-          {
-            type: EXECUTION_TYPE.TRADE,
-            message: JSON.stringify(choiceSellData),
-          },
-          '*'
-        );
+
         break;
       case EXECUTION_TYPE.TRADE_END:
         tradeStatus.value = TRADE_STATUS.COMPLETE;
