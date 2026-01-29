@@ -1,6 +1,7 @@
 import { sendLoggerMessage } from '@/common';
 import { sendFetchMessage } from '@/common/fetch';
 import { LOGGER_LEVEL, TARGET_URLS } from '@/constants';
+import { logger } from './logger';
 
 /**
  * 解析响应数据
@@ -69,7 +70,7 @@ async function parseRequestBody(body: BodyInit | null | undefined): Promise<any>
  */
 export function injectFetchInterceptor(options: FetchInterceptorOptions = {}): void {
   if ((window as any).__fetchInterceptorInjected) {
-    console.warn('Fetch 拦截器已注入，跳过重复注入');
+    logger.warn('Fetch 拦截器已注入，跳过重复注入');
     return;
   }
 
@@ -78,7 +79,7 @@ export function injectFetchInterceptor(options: FetchInterceptorOptions = {}): v
   (window as any).__fetchInterceptorInjected = true;
 
   if (enableLog) {
-    console.log('%c>>>>> Fetch 拦截器已注入', 'color:yellow;background:red;padding:2px 4px');
+    logger.info('Fetch 拦截器已注入');
   }
 
   // 保存原始 fetch 方法
@@ -97,7 +98,7 @@ export function injectFetchInterceptor(options: FetchInterceptorOptions = {}): v
       init?.method || (input instanceof Request ? input.method : 'GET')
     ).toUpperCase();
 
-    console.log('fetch url', url);
+    logger.debug('Fetch 请求:', { method, url });
 
     // 检查是否是目标 URL
     if (isTargetUrl(url, targetUrls)) {
@@ -111,7 +112,7 @@ export function injectFetchInterceptor(options: FetchInterceptorOptions = {}): v
         try {
           onRequest(method, url, requestBody);
         } catch (error) {
-          console.error('onRequest 回调执行失败:', error);
+          logger.error('onRequest 回调执行失败:', error);
         }
       }
 
@@ -125,11 +126,11 @@ export function injectFetchInterceptor(options: FetchInterceptorOptions = {}): v
         const status = response.status;
 
         if (enableLog) {
-          console.group(`%c[Fetch Response] ${method} ${url}`, 'color:green;font-weight:bold');
-          console.log('状态码:', status);
-          console.log('响应数据:', responseData);
-          console.log('耗时:', duration + 'ms');
-          console.groupEnd();
+          logger.group(`[Fetch Response] ${method} ${url}`);
+          logger.response('状态码:', status);
+          logger.response('响应数据:', responseData);
+          logger.response('耗时:', duration + 'ms');
+          logger.groupEnd();
         }
 
         // 发送消息
@@ -142,11 +143,11 @@ export function injectFetchInterceptor(options: FetchInterceptorOptions = {}): v
 
         // 触发响应回调
         if (onResponse) {
-          try {
-            onResponse(method, url, responseData, status);
-          } catch (error) {
-            console.error('onResponse 回调执行失败:', error);
-          }
+        try {
+          onResponse(method, url, responseData, status);
+        } catch (error) {
+          logger.error('onResponse 回调执行失败:', error);
+        }
         }
 
         return response;
@@ -154,7 +155,7 @@ export function injectFetchInterceptor(options: FetchInterceptorOptions = {}): v
         const err = error instanceof Error ? error : new Error(`Fetch 请求失败: ${method} ${url}`);
 
         if (enableLog) {
-          console.error(`%c[Fetch Error] ${method} ${url}`, 'color:red;font-weight:bold', err);
+          logger.error(`[Fetch Error] ${method} ${url}`, err);
         }
 
         // 触发错误回调
@@ -162,7 +163,7 @@ export function injectFetchInterceptor(options: FetchInterceptorOptions = {}): v
           try {
             onError(method, url, err);
           } catch (err) {
-            console.error('onError 回调执行失败:', err);
+            logger.error('onError 回调执行失败:', err);
           }
         }
 
@@ -180,13 +181,13 @@ export function injectFetchInterceptor(options: FetchInterceptorOptions = {}): v
  */
 export function removeFetchInterceptor(): void {
   if (!(window as any).__fetchInterceptorInjected) {
-    console.warn('Fetch 拦截器未注入，无需移除');
+    logger.warn('Fetch 拦截器未注入，无需移除');
     return;
   }
 
   // 注意：由于无法完全恢复原始 fetch，这里只移除标记
   delete (window as any).__fetchInterceptorInjected;
-  console.log('Fetch 拦截器标记已移除（注意：原始方法无法完全恢复）');
+  logger.info('Fetch 拦截器标记已移除（注意：原始方法无法完全恢复）');
 }
 
 if (typeof window !== 'undefined') {

@@ -1,5 +1,7 @@
 import { EXECUTION_TYPE } from '@/constants';
 import { mainLogError, mainLogInfo, mainLogWarn } from '@/model/log';
+import { executeCaptchaClickFlow } from './slideValid';
+import { logger } from './logger';
 let iframe: Window | undefined = undefined;
 let iframeDocument: Document | undefined = undefined;
 let prevChoice: { id: number; elecVolume: number }[] = [];
@@ -358,12 +360,13 @@ async function updateChoice(currentChoiceElement: HTMLTableRowElement | null) {
     mainLogWarn('点击摘牌按钮失败，但继续执行后续流程');
   }
 
-  console.log('currentChoice', {
+  logger.debug('当前选择状态', {
     currentChoice,
     prevChoice,
     nextChoice,
     isTrade,
   });
+  await executeCaptchaClickFlow();
 
   // 处理nextChoice
 

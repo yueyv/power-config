@@ -44,15 +44,7 @@ export default defineManifest({
       world: 'MAIN',
     },
   ],
-  permissions: [
-    'sidePanel',
-    'contentSettings',
-    'activeTab',
-    'scripting',
-    'storage',
-    'webRequest',
-    'alarms',
-  ],
+  permissions: ['contentSettings', 'activeTab', 'scripting', 'storage', 'webRequest', 'alarms'],
 
   background: {
     service_worker: 'src/background/main.ts',

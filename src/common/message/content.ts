@@ -5,6 +5,7 @@ import { receiveLoggerMessage } from '../log';
 import { BACKGROUND_CONTENT_CONNECTION_NAME, CONNECT_STATUS } from '@/constants';
 import { ref } from 'vue';
 import { logAction, logInfo } from '@/model/log';
+import { contentLogger } from '@/utils/logger';
 import {
   getChoiceSellData,
   getSellDataStatus,
@@ -24,7 +25,7 @@ export function useBackgroundConnection() {
   backgroundConnection.onMessage.addListener((msg) => {
     switch (msg.status) {
       case CONNECT_STATUS.CONNECT:
-        console.log('background 连接成功');
+        contentLogger.info('background 连接成功');
         break;
       default:
         break;
@@ -77,7 +78,7 @@ export function useBackgroundConnection() {
           JSON.parse(event.data.message)
         );
         logInfo('content', '完成选择', event.data.message);
-        await ElMessageBox.confirm('确定', '提示', {
+        await ElMessageBox.confirm('确定 继续交易吗？', '提示', {
           confirmButtonText: '确定',
           cancelButtonText: '取消',
         })

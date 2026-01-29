@@ -1,6 +1,7 @@
 import { sendLoggerMessage } from '@/common';
 import { sendXHRMessage } from '@/common/xhr';
 import { LOGGER_LEVEL, TARGET_URLS } from '@/constants';
+import { logger } from './logger';
 /**
  * 解析响应数据
  */
@@ -8,7 +9,7 @@ function parseResponse(responseText: string): any {
   if (!responseText) return null;
 
   try {
-    return JSON.parse(responseText);
+       return JSON.parse(responseText);
   } catch {
     return responseText;
   }
@@ -28,7 +29,7 @@ function isTargetUrl(url: string, targetUrls: string[]): boolean {
  */
 export function injectXHRInterceptor(options: XHRInterceptorOptions = {}): void {
   if ((XMLHttpRequest.prototype as any).__xhrInterceptorInjected) {
-    console.warn('XMLHttpRequest 拦截器已注入，跳过重复注入');
+    logger.warn('XMLHttpRequest 拦截器已注入，跳过重复注入');
     return;
   }
 
@@ -37,10 +38,7 @@ export function injectXHRInterceptor(options: XHRInterceptorOptions = {}): void 
   (XMLHttpRequest.prototype as any).__xhrInterceptorInjected = true;
 
   if (enableLog) {
-    console.log(
-      '%c>>>>> XMLHttpRequest 拦截器已注入',
-      'color:yellow;background:red;padding:2px 4px'
-    );
+    logger.info('XMLHttpRequest 拦截器已注入');
   }
 
   // 保存原始方法
@@ -75,7 +73,7 @@ export function injectXHRInterceptor(options: XHRInterceptorOptions = {}): void 
   ) {
     const method = this._method || 'UNKNOWN';
     const url = this._url || 'UNKNOWN';
-    console.log('xhr url', url);
+    logger.debug('XHR 请求:', { method, url });
     // 检查是否是目标 URL
     if (isTargetUrl(url, targetUrls)) {
       // 触发请求回调
@@ -83,7 +81,7 @@ export function injectXHRInterceptor(options: XHRInterceptorOptions = {}): void 
         try {
           onRequest(method, url);
         } catch (error) {
-          console.error('onRequest 回调执行失败:', error);
+          logger.error('onRequest 回调执行失败:', error);
         }
       }
 
@@ -95,10 +93,10 @@ export function injectXHRInterceptor(options: XHRInterceptorOptions = {}): void 
         const responseData = parseResponse(responseText);
 
         if (enableLog) {
-          console.group(`%c[XHR Response] ${method} ${url}`, 'color:green;font-weight:bold');
-          console.log('状态码:', status);
-          console.log('响应数据:', responseData);
-          console.groupEnd();
+          logger.group(`[XHR Response] ${method} ${url}`);
+          logger.response('状态码:', status);
+          logger.response('响应数据:', responseData);
+          logger.groupEnd();
         }
         sendXHRMessage({
           url,
@@ -107,11 +105,11 @@ export function injectXHRInterceptor(options: XHRInterceptorOptions = {}): void 
         });
         // 触发响应回调
         if (onResponse) {
-          try {
-            onResponse(method, url, responseData, status);
-          } catch (error) {
-            console.error('onResponse 回调执行失败:', error);
-          }
+        try {
+          onResponse(method, url, responseData, status);
+        } catch (error) {
+          logger.error('onResponse 回调执行失败:', error);
+        }
         }
       });
 
@@ -120,7 +118,7 @@ export function injectXHRInterceptor(options: XHRInterceptorOptions = {}): void 
         const error = new Error(`XHR 请求失败: ${method} ${url}`);
 
         if (enableLog) {
-          console.error(`%c[XHR Error] ${method} ${url}`, 'color:red;font-weight:bold', error);
+          logger.error(`[XHR Error] ${method} ${url}`, error);
         }
 
         // 触发错误回调
@@ -128,7 +126,7 @@ export function injectXHRInterceptor(options: XHRInterceptorOptions = {}): void 
           try {
             onError(method, url, error);
           } catch (err) {
-            console.error('onError 回调执行失败:', err);
+            logger.error('onError 回调执行失败:', err);
           }
         }
       });
@@ -138,7 +136,7 @@ export function injectXHRInterceptor(options: XHRInterceptorOptions = {}): void 
         const error = new Error(`XHR 请求超时: ${method} ${url}`);
 
         if (enableLog) {
-          console.warn(`%c[XHR Timeout] ${method} ${url}`, 'color:orange;font-weight:bold', error);
+          logger.warn(`[XHR Timeout] ${method} ${url}`, error);
         }
 
         // 触发错误回调
@@ -146,7 +144,7 @@ export function injectXHRInterceptor(options: XHRInterceptorOptions = {}): void 
           try {
             onError(method, url, error);
           } catch (err) {
-            console.error('onError 回调执行失败:', err);
+            logger.error('onError 回调执行失败:', err);
           }
         }
       });
@@ -162,12 +160,12 @@ export function injectXHRInterceptor(options: XHRInterceptorOptions = {}): void 
  */
 export function removeXHRInterceptor(): void {
   if (!(XMLHttpRequest.prototype as any).__xhrInterceptorInjected) {
-    console.warn('XMLHttpRequest 拦截器未注入，无需移除');
+    logger.warn('XMLHttpRequest 拦截器未注入，无需移除');
     return;
   }
 
   delete (XMLHttpRequest.prototype as any).__xhrInterceptorInjected;
-  console.log('XMLHttpRequest 拦截器标记已移除（注意：原始方法无法完全恢复）');
+  logger.info('XMLHttpRequest 拦截器标记已移除（注意：原始方法无法完全恢复）');
 }
 
 if (typeof window !== 'undefined') {

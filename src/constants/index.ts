@@ -4,6 +4,7 @@ export const TARGET_URLS = ['/zcq/scgpjy/jysb.do?method=getAllSellAndBuyData'];
 export const XHR_PORT_NAME = 'xhr-inject';
 export const SCRIPT_LOGGER_PORT_NAME = 'xhr-logger';
 export const FETCH_PORT_NAME = 'fetch-inject';
+export const SLIDER_POSITION_API = 'slider-position-api';
 export const LOGGER_NAME = 'logger';
 export const BACKGROUND_CONTENT_CONNECTION_NAME = 'background-content-connection';
 export const LOGGER_LEVEL = {
@@ -63,4 +64,5 @@ export enum EXECUTION_TYPE {
   CANCEL_TRADE = 'cancel_trade',
   TRADE_END = 'trade_end',
   NEXT_CHOICE = 'next_choice',
+  SLIDER_VALID = 'slider_valid',
 }

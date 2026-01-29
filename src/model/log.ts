@@ -1,4 +1,5 @@
 import { LOGGER_NAME, LOGGER_LEVEL, DEFAULT_MAX_LOGS, EXECUTION_TYPE } from '@/constants';
+import { backgroundLogger } from '@/utils/logger';
 
 /**
  * 获取存储键名
@@ -85,7 +86,10 @@ export async function setLogger(
     // 保存日志
     await saveLogs(storage.logs, storage.maxLogs);
   } catch (error) {
-    console.error('保存日志失败:', error);
+    // 使用原生 console.error 避免循环调用
+    if (typeof console !== 'undefined' && console.error) {
+      console.error('[Logger] 保存日志失败:', error);
+    }
   }
 }
 
@@ -156,7 +160,10 @@ export async function setMaxLogs(maxLogs: number): Promise<void> {
     const storage = await initLogStorage();
     await saveLogs(storage.logs, maxLogs);
   } catch (error) {
-    console.error('设置最大日志数量失败:', error);
+    // 使用原生 console.error 避免循环调用
+    if (typeof console !== 'undefined' && console.error) {
+      console.error('[Logger] 设置最大日志数量失败:', error);
+    }
   }
 }
 
