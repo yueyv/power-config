@@ -39,13 +39,14 @@ import 'element-plus/theme-chalk/el-message-box.css';
 import 'element-plus/theme-chalk/el-dialog.css';
 import 'element-plus/theme-chalk/el-table-v2.css';
 import { clearLogs, getLogs } from '@/model/log';
-import { onMounted, ref, h } from 'vue';
+import { onMounted, onUnmounted, ref, h } from 'vue';
 import dayjs from 'dayjs';
 import { ElButton, ElMessageBox, ElTooltip } from 'element-plus';
+import { LOGGER_NAME } from '@/constants';
 
 const tableData = ref<any>([]);
 const logDetailVisible = ref(false);
-const props = defineProps<{
+defineProps<{
   dialogHeight?: number;
 }>();
 const currentLogData = ref(null);
@@ -124,6 +125,13 @@ const getTableData = async () => {
   tableData.value = await getLogs();
 };
 
+const onChanged = (changes: Record<string, chrome.storage.StorageChange>, areaName: string) => {
+  if (areaName !== 'local') return;
+  if (!changes[LOGGER_NAME]) return;
+  const next = changes[LOGGER_NAME].newValue as { logs?: LogEntry[] } | undefined;
+  tableData.value = Array.isArray(next?.logs) ? next!.logs : [];
+};
+
 const copyLogData = () => {
   navigator.clipboard.writeText(JSON.stringify(currentLogData.value, null, 2));
   ElMessage.success('复制成功');
@@ -142,9 +150,11 @@ const clearAllLogs = async () => {
 
 onMounted(() => {
   getTableData();
-  setInterval(async () => {
-    getTableData();
-  }, 1000);
+  chrome.storage.onChanged.addListener(onChanged);
+});
+
+onUnmounted(() => {
+  chrome.storage.onChanged.removeListener(onChanged);
 });
 </script>
 <style scoped lang="scss">

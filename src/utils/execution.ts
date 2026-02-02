@@ -62,6 +62,14 @@ export function getMCGPTableData(): BUY_DATA_ITEM[] | null {
       }
     });
   }
+  const findIndexByHeader = (aliases: string[]) => {
+    if (!headers.length) return -1;
+    for (const alias of aliases) {
+      const idx = headers.findIndex((h) => h && h.includes(alias));
+      if (idx >= 0) return idx;
+    }
+    return -1;
+  };
 
   // 获取tbody中的所有行
   const tbody = table.querySelector('tbody');
@@ -78,23 +86,39 @@ export function getMCGPTableData(): BUY_DATA_ITEM[] | null {
       return; // 跳过不完整的行
     }
 
+    const getCellText = (aliases: string[], fallbackIndex: number) => {
+      const idx = findIndexByHeader(aliases);
+      const cell = idx >= 0 ? tds[idx] : tds[fallbackIndex];
+      return cell?.textContent?.trim() || '';
+    };
+
     // 提取数据
-    const gpdl = parseFloat(tds[0].textContent?.trim() || '0');
-    const sydl = parseFloat(tds[1].textContent?.trim() || '0');
-    const gpdj = parseFloat(tds[2].textContent?.trim() || '0');
-    const dprice = parseFloat(tds[3].textContent?.trim() || '0');
-    const xhprice = parseFloat(tds[4].textContent?.trim() || '0');
-    const bfcj = tds[5].textContent?.trim() || '';
-    const hybdsj = tds[6].textContent?.trim() || '';
+    const gpdl = parseFloat(getCellText(['挂牌电量'], 0) || '0');
+    const sydl = parseFloat(getCellText(['剩余电量'], 1) || '0');
+    const gpdj = parseFloat(getCellText(['挂牌价格'], 2) || '0');
+    const dprice = parseFloat(getCellText(['D1曲线', 'D1'], 3) || '0');
+    const xhprice = parseFloat(getCellText(['该曲线', '现货价值', '现货'], 4) || '0');
+    const bfcj = getCellText(['部分成交'], 5) || '';
+    const hybdsj = getCellText(['合约标的时间', '合同标的时间', '合约标的'], 6) || '';
+    const zpsysj = getCellText(['摘牌系统时间', '系统时间'], 6) || '';
+    const xtdqsj = getCellText(['系统订单时间', '到期时间', '订单到期时间', '倒计时'], 6) || '';
 
     // 从操作按钮中提取ID
-    const actionButton = tds[7].querySelector('button');
+    const actionIndex =
+      findIndexByHeader(['操作', '摘牌', '操作ID']) >= 0
+        ? findIndexByHeader(['操作', '摘牌', '操作ID'])
+        : Math.max(0, tds.length - 2);
+    const actionButton = tds[actionIndex]?.querySelector('button');
     const actionOnclick = actionButton?.getAttribute('onclick') || '';
     const actionIDMatch = actionOnclick.match(/wyzp\((\d+)\)/);
     const actionID = actionIDMatch ? parseInt(actionIDMatch[1], 10) : 0;
 
     // 从详情按钮中提取ID
-    const detailButton = tds[8].querySelector('button');
+    const detailIndex =
+      findIndexByHeader(['详情', '详情ID']) >= 0
+        ? findIndexByHeader(['详情', '详情ID'])
+        : Math.max(0, tds.length - 1);
+    const detailButton = tds[detailIndex]?.querySelector('button');
     const detailOnclick = detailButton?.getAttribute('onclick') || '';
     const detailIDMatch = detailOnclick.match(/info\((\d+)/);
     const detailID = detailIDMatch ? parseInt(detailIDMatch[1], 10) : 0;
@@ -108,6 +132,8 @@ export function getMCGPTableData(): BUY_DATA_ITEM[] | null {
       xhprice,
       bfcj: bfcj === '是' ? '是' : '否',
       hybdsj,
+      zpsysj,
+      xtdqsj,
     });
   });
 

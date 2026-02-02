@@ -76,6 +76,7 @@ import 'element-plus/theme-chalk/el-table-v2.css';
 import { computed, h, onMounted, ref } from 'vue';
 import { CheckboxValueType, ElCheckbox, ElMessageBox } from 'element-plus';
 import { TRADE_STATUS } from '@/constants';
+import { compareTradeCandidates, getTimeLeftMs } from '@/utils/tradePriority';
 import {
   getChoiceSellData,
   getTradeElectricityVolume,
@@ -95,7 +96,8 @@ const choiceSellData = ref<number[]>([]);
 const viewData = computed(() => {
   return props.data
     .filter((item) => item.bfcj === '是' && item.dprice === item.xhprice)
-    .sort((a, b) => a.gpdj - b.gpdj);
+    .slice()
+    .sort((a, b) => compareTradeCandidates(a, b));
 });
 const choiceSellDataTotal = computed(() => {
   return choiceSellData.value.reduce(
@@ -104,6 +106,24 @@ const choiceSellDataTotal = computed(() => {
   );
 });
 const columns = ref<any>([
+  {
+    key: 'countdown',
+    title: '倒计时',
+    width: 110,
+    align: 'center',
+    cellRenderer: ({ rowData }: { rowData: SELL_DATA_ITEM }) => {
+      const ms = getTimeLeftMs(rowData);
+      if (ms === null) return h('span', '-');
+      const t = Math.max(0, Math.floor(ms / 1000));
+      const mm = String(Math.floor((t % 3600) / 60)).padStart(2, '0');
+      const ss = String(t % 60).padStart(2, '0');
+      const hh = Math.floor(t / 3600);
+      const text = hh > 0 ? `${hh}:${mm}:${ss}` : `${mm}:${ss}`;
+      const style =
+        ms <= 30_000 ? 'color:#f56c6c;font-weight:700' : ms <= 120_000 ? 'color:#e6a23c' : '';
+      return h('span', { style }, text);
+    },
+  },
   {
     key: 'selection',
     width: 50,

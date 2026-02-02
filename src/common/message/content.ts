@@ -3,7 +3,7 @@ import { FETCH_PORT_NAME } from '@/constants';
 import { SCRIPT_LOGGER_PORT_NAME } from '@/constants';
 import { receiveLoggerMessage } from '../log';
 import { BACKGROUND_CONTENT_CONNECTION_NAME, CONNECT_STATUS } from '@/constants';
-import { ref } from 'vue';
+import { onUnmounted, ref } from 'vue';
 import { logAction, logInfo } from '@/model/log';
 import { contentLogger } from '@/utils/logger';
 import {
@@ -22,7 +22,7 @@ export function useBackgroundConnection() {
   const actualElectricityVolume = ref<number>(0);
 
   // 监听消息
-  backgroundConnection.onMessage.addListener((msg) => {
+  const onPortMessage = (msg: any) => {
     switch (msg.status) {
       case CONNECT_STATUS.CONNECT:
         contentLogger.info('background 连接成功');
@@ -30,13 +30,25 @@ export function useBackgroundConnection() {
       default:
         break;
     }
-  });
+  };
+  backgroundConnection.onMessage.addListener(onPortMessage);
 
   // 监听消息
-  window.addEventListener('message', async function (event) {
+  const onWindowMessage = async (event: MessageEvent<any>) => {
     if (event.source !== window || !event.data) {
       return;
     }
+
+    const raw = event.data.message;
+    const safeJsonParse = (value: unknown) => {
+      if (typeof value !== 'string') return value;
+      try {
+        return JSON.parse(value);
+      } catch {
+        return null;
+      }
+    };
+
     switch (event.data.type) {
       // 从注入的content script 发送过来的XHR消息转发给background
       case XHR_PORT_NAME:
@@ -62,21 +74,31 @@ export function useBackgroundConnection() {
       // 从注入的content script 发送过来的日志消息转发给background
       case SCRIPT_LOGGER_PORT_NAME:
       case EXECUTION_TYPE.LOG_INFO:
-        receiveLoggerMessage(
-          JSON.parse(event.data.message).level,
-          JSON.parse(event.data.message).message,
-          JSON.parse(event.data.message)?.data || null
-        );
+        {
+          const parsed = safeJsonParse(raw) as {
+            level?: string;
+            message?: string;
+            data?: any;
+          } | null;
+          if (parsed?.level && parsed?.message) {
+            receiveLoggerMessage(parsed.level, parsed.message, parsed.data ?? null);
+          }
+        }
         break;
       case EXECUTION_TYPE.GET_SELL_DATA:
-        sellData.value = JSON.parse(event.data.message).data;
+        {
+          const parsed = safeJsonParse(raw) as { data?: SELL_DATA_ITEM[] } | null;
+          if (parsed?.data) {
+            sellData.value = parsed.data;
+          }
+        }
         logInfo('content', '获取挂牌数据成功', sellData.value);
         setSellData(sellData.value);
         break;
-      case EXECUTION_TYPE.NEXT_CHOICE:
-        const choiceSellData: CHOICE_SELL_DATA = await updateTradeData(
-          JSON.parse(event.data.message)
-        );
+      case EXECUTION_TYPE.NEXT_CHOICE: {
+        const parsed = safeJsonParse(raw) as { id: number; elecVolume: number } | null;
+        if (!parsed) break;
+        const choiceSellData: CHOICE_SELL_DATA = await updateTradeData(parsed);
         logInfo('content', '完成选择', event.data.message);
         await ElMessageBox.confirm('确定 继续交易吗？', '提示', {
           confirmButtonText: '确定',
@@ -100,15 +122,30 @@ export function useBackgroundConnection() {
         // 实际供电量在prevChoice中
 
         break;
+      }
       case EXECUTION_TYPE.TRADE_END:
         tradeStatus.value = TRADE_STATUS.COMPLETE;
-        updateTradeData(JSON.parse(event.data.message));
+        {
+          const parsed = safeJsonParse(raw) as { id: number; elecVolume: number } | null;
+          if (parsed) updateTradeData(parsed);
+        }
         setSellDataStatus(tradeStatus.value);
         logInfo('content', '交易结束');
         break;
       default:
         break;
     }
+  };
+  window.addEventListener('message', onWindowMessage);
+
+  onUnmounted(() => {
+    try {
+      backgroundConnection.onMessage.removeListener(onPortMessage);
+    } catch {}
+    window.removeEventListener('message', onWindowMessage);
+    try {
+      backgroundConnection.disconnect();
+    } catch {}
   });
   function sendMessageToBackground(message: BackgroundConnectionMessage) {
     if (backgroundConnection) {

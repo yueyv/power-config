@@ -1,5 +1,4 @@
 import { LOGGER_NAME, LOGGER_LEVEL, DEFAULT_MAX_LOGS, EXECUTION_TYPE } from '@/constants';
-import { backgroundLogger } from '@/utils/logger';
 
 /**
  * 获取存储键名
@@ -35,8 +34,8 @@ async function initLogStorage(): Promise<LogStorage> {
  */
 async function saveLogs(logs: LogEntry[], maxLogs: number): Promise<void> {
   return new Promise((resolve, reject) => {
-    // 限制日志数量，保留最新的日志
-    const limitedLogs = logs.slice(-maxLogs);
+    // 限制日志数量：logs[0] 是最新（unshift 写入），保留最新的 maxLogs 条
+    const limitedLogs = logs.slice(0, maxLogs);
 
     chrome.storage.local.set(
       {
@@ -107,7 +106,8 @@ export async function getLogs(limit?: number): Promise<LogEntry[]> {
 
       const stored = result[getStorageKey()] as LogStorage | undefined;
       if (stored && Array.isArray(stored.logs)) {
-        const logs = limit ? stored.logs.slice(-limit) : stored.logs;
+        // stored.logs[0] 是最新，limit 时取最新 N 条
+        const logs = typeof limit === 'number' ? stored.logs.slice(0, limit) : stored.logs;
         resolve(logs);
       } else {
         resolve([]);

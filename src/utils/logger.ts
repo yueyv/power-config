@@ -3,7 +3,7 @@
  * 提供统一的日志接口，支持日志级别控制、格式化输出和存储
  */
 
-import { LOGGER_LEVEL, LOGGER_TARGET } from '@/constants';
+import { LOGGER_TARGET } from '@/constants';
 import { logError, logInfo, logWarn, logDebug, logResponse, logAction } from '@/model/log';
 import { sendLoggerMessage } from '@/common/log';
 
@@ -76,7 +76,7 @@ const consoleStyles: Record<LogLevel, string> = {
 function formatMessage(level: LogLevel, message: string, data?: any): string {
   const timestamp = new Date().toLocaleTimeString('zh-CN', { hour12: false });
   const prefix = `[${timestamp}] [${level.toUpperCase()}]`;
-  
+
   if (data !== undefined) {
     try {
       const dataStr = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
@@ -85,7 +85,7 @@ function formatMessage(level: LogLevel, message: string, data?: any): string {
       return `${prefix} ${message}\n[无法序列化数据]`;
     }
   }
-  
+
   return `${prefix} ${message}`;
 }
 
