@@ -10,7 +10,7 @@ let currentChoice: { id: number; elecVolume: number } = { id: 0, elecVolume: 0 }
 let isTrade = false;
 function init() {
   // @ts-ignore
-  iframe = document.getElementsByClassName('body-iframe')?.[0].contentWindow;
+  iframe = document.getElementsByClassName('body-iframe tabsr')?.[0].contentWindow;
   iframeDocument = iframe?.document;
 
   // 检查样式是否已经注入
@@ -41,6 +41,63 @@ function init() {
   } else {
     mainLogError('无法找到iframe的head元素');
   }
+}
+
+/**
+ * 将日期时间字符串解析为时间戳（毫秒）。
+ * 支持 2026-02-02 12:34:56、2026/02/02 12:34:56 等。
+ */
+function parseDateTimeToMs(input: string): number | null {
+  const raw = input?.trim();
+  if (!raw) return null;
+  const normalized = raw.replace(/\//g, '-');
+  const ms = Date.parse(normalized);
+  return Number.isNaN(ms) ? null : ms;
+}
+
+/**
+ * 在 DOM 解析阶段计算并写入「到期/可摘牌」时间戳（毫秒）。
+ * 优先：操作列 N 秒 → 当前时间 + N*1000；否则解析 xtdqsj 为绝对时间。
+ */
+function computeAvailableAtMs(
+  actionCountdownSeconds: number | undefined,
+  xtdqsj: string
+): number | undefined {
+  if (actionCountdownSeconds !== undefined && Number.isFinite(actionCountdownSeconds)) {
+    return Date.now() + Math.max(0, actionCountdownSeconds) * 1000;
+  }
+  const ms = parseDateTimeToMs(xtdqsj);
+  return ms ?? undefined;
+}
+
+/**
+ * 从操作列文本解析「N秒后可摘牌」的秒数。
+ * 支持纯数字 "30"、中文 "30秒后可摘牌"、"30秒" 等。
+ */
+function parseActionCountdownSeconds(text: string): number | undefined {
+  const raw = text.trim();
+  if (!raw) return undefined;
+  // 纯数字：即秒数
+  const onlyNum = raw.match(/^\d+$/);
+  if (onlyNum) {
+    const n = parseInt(onlyNum[0], 10);
+    return Number.isFinite(n) ? n : undefined;
+  }
+  // 「N秒后可摘牌」「N秒」等
+  const secMatch = raw.match(/(\d+)\s*秒/);
+  if (secMatch) {
+    const n = parseInt(secMatch[1], 10);
+    return Number.isFinite(n) ? n : undefined;
+  }
+  // 分钟+秒
+  const minMatch = raw.match(/(\d+)\s*分/);
+  const secAfterMin = raw.match(/(\d+)\s*秒/);
+  if (minMatch || secAfterMin) {
+    const m = minMatch ? parseInt(minMatch[1], 10) : 0;
+    const s = secAfterMin ? parseInt(secAfterMin[1], 10) : 0;
+    if (Number.isFinite(m) && Number.isFinite(s)) return m * 60 + s;
+  }
+  return undefined;
 }
 
 export function getMCGPTableData(): BUY_DATA_ITEM[] | null {
@@ -103,15 +160,20 @@ export function getMCGPTableData(): BUY_DATA_ITEM[] | null {
     const zpsysj = getCellText(['摘牌系统时间', '系统时间'], 6) || '';
     const xtdqsj = getCellText(['系统订单时间', '到期时间', '订单到期时间', '倒计时'], 6) || '';
 
-    // 从操作按钮中提取ID
+    // 从操作列提取：按钮 ID + 「N秒后可摘牌」的倒计时秒数
     const actionIndex =
       findIndexByHeader(['操作', '摘牌', '操作ID']) >= 0
         ? findIndexByHeader(['操作', '摘牌', '操作ID'])
         : Math.max(0, tds.length - 2);
-    const actionButton = tds[actionIndex]?.querySelector('button');
+    const actionCell = tds[actionIndex];
+    const actionButton = actionCell?.querySelector('button');
     const actionOnclick = actionButton?.getAttribute('onclick') || '';
     const actionIDMatch = actionOnclick.match(/wyzp\((\d+)\)/);
     const actionID = actionIDMatch ? parseInt(actionIDMatch[1], 10) : 0;
+    // 操作列可能是「30」或「30秒后可摘牌」等，解析为剩余秒数
+    const actionText = (actionCell?.textContent ?? actionButton?.textContent ?? '').trim();
+    const actionCountdownSeconds = parseActionCountdownSeconds(actionText);
+    const availableAtMs = computeAvailableAtMs(actionCountdownSeconds, xtdqsj);
 
     // 从详情按钮中提取ID
     const detailIndex =
@@ -134,6 +196,8 @@ export function getMCGPTableData(): BUY_DATA_ITEM[] | null {
       hybdsj,
       zpsysj,
       xtdqsj,
+      ...(actionCountdownSeconds !== undefined && { actionCountdownSeconds }),
+      ...(availableAtMs !== undefined && { availableAtMs }),
     });
   });
 
@@ -418,7 +482,8 @@ async function updateChoice(currentChoiceElement: HTMLTableRowElement | null) {
   );
 }
 
-export async function tradeIframe() {
+async function renderChoiceState(options?: { autoTrade?: boolean }) {
+  const autoTrade = options?.autoTrade ?? true;
   const table = iframeDocument?.getElementById('mcgpxx');
   if (!table) {
     return;
@@ -459,8 +524,15 @@ export async function tradeIframe() {
       behavior: 'smooth',
       block: 'center',
     });
-    updateChoice(currentChoiceElement);
+    // 自动模式下才执行完整自动交易流程；手动模式仅高亮和滚动
+    if (autoTrade) {
+      updateChoice(currentChoiceElement);
+    }
   }
+}
+
+export async function tradeIframe() {
+  await renderChoiceState({ autoTrade: true });
 }
 
 window.addEventListener('message', (event) => {
@@ -491,13 +563,38 @@ window.addEventListener('message', (event) => {
       mainLogInfo('终止交易', event.data.message);
 
       break;
-    case EXECUTION_TYPE.TRADE:
+    case EXECUTION_TYPE.TRADE: {
       isTrade = true;
       mainLogInfo('交易', JSON.parse(event.data.message));
       const choiceSellData: CHOICE_SELL_DATA = JSON.parse(event.data.message);
       currentChoice = choiceSellData.currentChoice;
       prevChoice = choiceSellData.prevChoice;
       nextChoice = choiceSellData.nextChoice;
-      tradeIframe();
+      void tradeIframe();
+      break;
+    }
+    case EXECUTION_TYPE.MANUAL_TRADE: {
+      // 手动交易视图：只高亮和滚动到对应交易序列，不触发自动点击和输入
+      isTrade = false;
+      mainLogInfo('手动交易视图', JSON.parse(event.data.message));
+      const manualChoiceSellData: CHOICE_SELL_DATA = JSON.parse(event.data.message);
+      currentChoice = manualChoiceSellData.currentChoice;
+      prevChoice = manualChoiceSellData.prevChoice;
+      nextChoice = manualChoiceSellData.nextChoice;
+      void renderChoiceState({ autoTrade: false });
+      break;
+    }
+    case EXECUTION_TYPE.REQUEST_SELL_DATA: {
+      // 重新解析 iframe 表格并回传最新挂牌数据
+      const buyData = getMCGPTableData();
+      window.postMessage(
+        {
+          type: EXECUTION_TYPE.GET_SELL_DATA,
+          message: JSON.stringify({ data: buyData }),
+        },
+        '*'
+      );
+      break;
+    }
   }
 });

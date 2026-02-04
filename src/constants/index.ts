@@ -65,4 +65,7 @@ export enum EXECUTION_TYPE {
   TRADE_END = 'trade_end',
   NEXT_CHOICE = 'next_choice',
   SLIDER_VALID = 'slider_valid',
+  MANUAL_TRADE = 'manual_trade',
+  /** 请求 execution 重新解析页面表格并同步最新挂牌数据 */
+  REQUEST_SELL_DATA = 'request_sell_data',
 }

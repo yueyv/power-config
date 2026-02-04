@@ -13,13 +13,40 @@ import {
   setSellData,
   setSellDataStatus,
 } from '@/model/sellData';
+import { getTimeLeftMs } from '@/utils/tradePriority';
 import { ElMessageBox } from 'element-plus';
 
-export function useBackgroundConnection() {
+/** 按挂牌价格 + 倒计时排序（与 TradeViewer 选中后顺序一致）：价格升序，同价则无倒计时在前、再按剩余时间升序 */
+function sortChoiceItemsByPriceAndCountdown(
+  items: { id: number; elecVolume: number }[],
+  sellDataList: SELL_DATA_ITEM[]
+): { id: number; elecVolume: number }[] {
+  return [...items].sort((a, b) => {
+    const itemA = sellDataList.find((r) => r.gpid === a.id);
+    const itemB = sellDataList.find((r) => r.gpid === b.id);
+    const pa = itemA?.gpdj ?? 0;
+    const pb = itemB?.gpdj ?? 0;
+    if (pa !== pb) return pa - pb;
+    const ta = itemA ? getTimeLeftMs(itemA) : null;
+    const tb = itemB ? getTimeLeftMs(itemB) : null;
+    if (ta === null && tb === null) return 0;
+    if (ta === null) return -1;
+    if (tb === null) return 1;
+    return ta - tb;
+  });
+}
+
+export type UseBackgroundConnectionOptions = {
+  /** 下一步交易时若下一笔有倒计时，先显示等待弹窗；返回 Promise<true> 表示用户取消，false 表示可继续 */
+  showWaitCountdown?: (getCurrentMs: () => number | null) => Promise<boolean>;
+};
+
+export function useBackgroundConnection(options?: UseBackgroundConnectionOptions) {
   const backgroundConnection = chrome.runtime.connect({ name: BACKGROUND_CONTENT_CONNECTION_NAME });
   const tradeStatus = ref<string>(TRADE_STATUS.DISPLAY);
   const sellData = ref<SELL_DATA_ITEM[]>([]);
   const actualElectricityVolume = ref<number>(0);
+  const showWaitCountdown = options?.showWaitCountdown;
 
   // 监听消息
   const onPortMessage = (msg: any) => {
@@ -100,27 +127,43 @@ export function useBackgroundConnection() {
         if (!parsed) break;
         const choiceSellData: CHOICE_SELL_DATA = await updateTradeData(parsed);
         logInfo('content', '完成选择', event.data.message);
-        await ElMessageBox.confirm('确定 继续交易吗？', '提示', {
+        const proceed = await ElMessageBox.confirm('确定 继续交易吗？', '提示', {
           confirmButtonText: '确定',
           cancelButtonText: '取消',
         })
-          .then(() => {
-            window.postMessage(
-              {
-                type: EXECUTION_TYPE.TRADE,
-                message: JSON.stringify(choiceSellData),
-              },
-              '*'
-            );
-          })
-          .catch(() => {
-            tradeStatus.value = TRADE_STATUS.CANCEL_TRADE;
-            setSellDataStatus(tradeStatus.value);
-            logAction('content', '异常停止，终止交易');
-          });
-
-        // 实际供电量在prevChoice中
-
+          .then(() => true)
+          .catch(() => false);
+        if (!proceed) {
+          tradeStatus.value = TRADE_STATUS.CANCEL_TRADE;
+          setSellDataStatus(tradeStatus.value);
+          logAction('content', '异常停止，终止交易');
+          break;
+        }
+        // 下一步交易：若下一笔有倒计时则先等待并提示
+        const nextChoice = choiceSellData.currentChoice;
+        if (nextChoice && showWaitCountdown) {
+          const getCurrentMs = () => {
+            const item = sellData.value.find((r) => r.gpid === nextChoice.id);
+            return item ? getTimeLeftMs(item) : null;
+          };
+          const ms = getCurrentMs();
+          if (ms !== null && ms > 0) {
+            const cancelled = await showWaitCountdown(getCurrentMs);
+            if (cancelled) {
+              tradeStatus.value = TRADE_STATUS.CANCEL_TRADE;
+              setSellDataStatus(tradeStatus.value);
+              logAction('content', '等待倒计时取消，终止交易');
+              break;
+            }
+          }
+        }
+        window.postMessage(
+          {
+            type: EXECUTION_TYPE.TRADE,
+            message: JSON.stringify(choiceSellData),
+          },
+          '*'
+        );
         break;
       }
       case EXECUTION_TYPE.TRADE_END:
@@ -203,6 +246,15 @@ export function useBackgroundConnection() {
     );
     choiceSellData.currentChoice = choiceSellData.nextChoice[0];
     choiceSellData.nextChoice = choiceSellData.nextChoice.slice(1);
+    // 剩余队列按挂牌价格与倒计时重新排序（与选中后交易顺序一致）
+    const pending = [choiceSellData.currentChoice, ...choiceSellData.nextChoice].filter(
+      (x): x is { id: number; elecVolume: number } => x != null
+    );
+    if (pending.length > 0) {
+      const sorted = sortChoiceItemsByPriceAndCountdown(pending, sellData.value);
+      choiceSellData.currentChoice = sorted[0];
+      choiceSellData.nextChoice = sorted.slice(1);
+    }
     setChoiceSellData(choiceSellData);
     return choiceSellData;
   }
@@ -210,15 +262,36 @@ export function useBackgroundConnection() {
   function tradeIframe(data: { id: number; elecVolume: number }[]) {
     tradeStatus.value = TRADE_STATUS.TRADE;
     setSellDataStatus(tradeStatus.value);
+    const sorted = sortChoiceItemsByPriceAndCountdown(data, sellData.value);
     const choiceSellData: CHOICE_SELL_DATA = {
       prevChoice: [],
-      currentChoice: data[0],
-      nextChoice: data.slice(1),
+      currentChoice: sorted[0],
+      nextChoice: sorted.slice(1),
     };
     setChoiceSellData(choiceSellData);
     window.postMessage(
       {
         type: EXECUTION_TYPE.TRADE,
+        message: JSON.stringify(choiceSellData),
+      },
+      '*'
+    );
+  }
+
+  /**
+   * 手动交易视图：只在页面中高亮 / 滚动到对应交易序列，不自动点击或输入。
+   */
+  function manualScrollIframe(data: { id: number; elecVolume: number }[]) {
+    const sorted = sortChoiceItemsByPriceAndCountdown(data, sellData.value);
+    if (!sorted.length) return;
+    const choiceSellData: CHOICE_SELL_DATA = {
+      prevChoice: [],
+      currentChoice: sorted[0],
+      nextChoice: sorted.slice(1),
+    };
+    window.postMessage(
+      {
+        type: EXECUTION_TYPE.MANUAL_TRADE,
         message: JSON.stringify(choiceSellData),
       },
       '*'
@@ -253,6 +326,12 @@ export function useBackgroundConnection() {
       '*'
     );
   }
+
+  /** 向 execution 请求同步最新挂牌数据（重新解析 iframe 表格并回传 GET_SELL_DATA） */
+  function requestSyncSellData() {
+    window.postMessage({ type: EXECUTION_TYPE.REQUEST_SELL_DATA }, '*');
+  }
+
   return {
     sendMessageToBackground,
     initIframe,
@@ -263,5 +342,7 @@ export function useBackgroundConnection() {
     resetTradeIframe,
     actualElectricityVolume,
     continueTradeIframe,
+    manualScrollIframe,
+    requestSyncSellData,
   };
 }

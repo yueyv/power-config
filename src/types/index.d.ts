@@ -119,6 +119,10 @@ interface BUY_DATA_ITEM {
   hybdsj?: string;
   // 系统订单时间
   xtdqsj?: string;
+  /** 操作列显示的「N秒后可摘牌」中的秒数，用于倒计时排序 */
+  actionCountdownSeconds?: number;
+  /** 可摘牌/到期时间戳（毫秒），DOM 解析时写入；展示时 剩余 = availableAtMs - Date.now() */
+  availableAtMs?: number;
 }
 
 interface CHOICE_SELL_DATA {
@@ -138,6 +142,10 @@ interface SELL_DATA_ITEM {
   xhprice: number;
   zpsysj: string;
   gpdj: number;
+  /** 操作列「N秒后可摘牌」的秒数，用于倒计时 */
+  actionCountdownSeconds?: number;
+  /** 可摘牌/到期时间戳（毫秒），解析时写入；展示时 剩余 = availableAtMs - Date.now() */
+  availableAtMs?: number;
 }
 interface MCGPTableRow {
   挂牌电量: number;

@@ -14,13 +14,13 @@ declare module 'vue' {
   export interface GlobalComponents {
     Affix: typeof import('./src/components/Affix.vue')['default']
     ElAutoResizer: typeof import('element-plus/es')['ElAutoResizer']
-    ElButton: typeof import('element-plus/es')['ElButton']
     ElConfigProvider: typeof import('element-plus/es')['ElConfigProvider']
     ElDialog: typeof import('element-plus/es')['ElDialog']
     ElInput: typeof import('element-plus/es')['ElInput']
     ElTableV2: typeof import('element-plus/es')['ElTableV2']
     LogViewer: typeof import('./src/components/LogViewer.vue')['default']
     TradeViewer: typeof import('./src/components/TradeViewer.vue')['default']
+    WaitCountdownDialog: typeof import('./src/components/WaitCountdownDialog.vue')['default']
   }
 }
 
@@ -28,11 +28,11 @@ declare module 'vue' {
 declare global {
   const Affix: typeof import('./src/components/Affix.vue')['default']
   const ElAutoResizer: typeof import('element-plus/es')['ElAutoResizer']
-  const ElButton: typeof import('element-plus/es')['ElButton']
   const ElConfigProvider: typeof import('element-plus/es')['ElConfigProvider']
   const ElDialog: typeof import('element-plus/es')['ElDialog']
   const ElInput: typeof import('element-plus/es')['ElInput']
   const ElTableV2: typeof import('element-plus/es')['ElTableV2']
   const LogViewer: typeof import('./src/components/LogViewer.vue')['default']
   const TradeViewer: typeof import('./src/components/TradeViewer.vue')['default']
+  const WaitCountdownDialog: typeof import('./src/components/WaitCountdownDialog.vue')['default']
 }
