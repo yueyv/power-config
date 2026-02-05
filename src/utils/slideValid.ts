@@ -1,4 +1,54 @@
-import { logger } from './logger';
+import { EXECUTION_TYPE } from '@/constants';
+
+/**
+ * 仅使用 console + postMessage，供 content 转发；不依赖 chrome.*（运行在注入的 window 上下文）
+ */
+function execLog(
+  level: 'info' | 'warn' | 'error' | 'debug',
+  message: string,
+  data?: unknown
+): void {
+  const payload = { level, message, data };
+  if (level === 'error') console.error('[slideValid]', message, data);
+  else if (level === 'warn') console.warn('[slideValid]', message, data);
+  else if (level === 'debug') console.debug('[slideValid]', message, data);
+  else console.log('[slideValid]', message, data);
+  try {
+    window.postMessage({ type: EXECUTION_TYPE.LOG_INFO, message: JSON.stringify(payload) }, '*');
+  } catch {
+    // ignore
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 验证码容器：imgscode1 下第一个 .mask（验证码弹层仅在此内）
+// 结构：.verifybox > .verifybox-bottom > .verify-img-panel img.backImg（背景）
+//      .verify-bar-area > .verify-left-bar > .verify-move-block（滑块，style.left）
+//      .verify-move-block > .verify-sub-block > img.bock-backImg（拼图块）
+// ---------------------------------------------------------------------------
+const CAPTCHA_CONTAINER_SELECTOR = '#imgscode1 .mask';
+
+/** 获取验证码所在容器（#imgscode1 下第一个 .mask），未找到则返回 null */
+function getCaptchaContainer(): HTMLElement | null {
+  const el = document.querySelector(CAPTCHA_CONTAINER_SELECTOR);
+  return el instanceof HTMLElement ? el : null;
+}
+
+const VERIFY_SELECTORS = {
+  /** 背景图：大图 */
+  bgImg: '.verify-img-panel img.backImg',
+  /** 拼图块：小图，用于识别缺口位置 */
+  puzzleImg: '.verify-sub-block img.bock-backImg',
+  /** 可拖动的滑块块（通过 style.left 移动） */
+  moveBlock: '.verify-move-block',
+  /** 滑块轨道/容器，宽度与背景一致（如 400px） */
+  barArea: '.verify-bar-area',
+  /** 兼容：易盾等其它验证码的容器与滑块 */
+  yidunContainer: '.yidun_control',
+  yidunSlider: '.yidun_slider',
+  yidunPuzzle: '.bock-backImg',
+  yidunBg: '.backImg',
+} as const;
 
 /**
  * 模拟真实的鼠标点击事件
@@ -7,14 +57,14 @@ import { logger } from './logger';
  */
 function simulateClick(element: HTMLElement | null): boolean {
   if (!element) {
-    logger.error('模拟点击失败：元素不存在');
+    execLog('error', '模拟点击失败：元素不存在');
     return false;
   }
 
   try {
     // 确保元素可见和可交互
     if (element.offsetParent === null) {
-      logger.warn('元素不可见，尝试滚动到元素位置');
+      execLog('warn', '元素不可见，尝试滚动到元素位置');
       element.scrollIntoView({ behavior: 'smooth', block: 'center' });
       return false;
     }
@@ -56,7 +106,7 @@ function simulateClick(element: HTMLElement | null): boolean {
     events.forEach((event) => {
       const defaultPrevented = !element.dispatchEvent(event);
       if (defaultPrevented) {
-        logger.warn(`事件 ${event.type} 被阻止`);
+        execLog('warn', `事件 ${event.type} 被阻止`);
       }
     });
 
@@ -83,13 +133,13 @@ function simulateClick(element: HTMLElement | null): boolean {
           // 在 window 对象上查找并调用函数
           if (typeof (window as any)[funcName] === 'function') {
             (window as any)[funcName](...args);
-            logger.debug(`直接调用函数：${funcName}(${args.join(', ')})`);
+            execLog('debug', `直接调用函数：${funcName}(${args.join(', ')})`);
           } else {
-            logger.warn(`函数 ${funcName} 不存在`);
+            execLog('warn', `函数 ${funcName} 不存在`);
           }
         }
       } catch (error) {
-        logger.error('执行 onclick 属性失败', error);
+        execLog('error', '执行 onclick 属性失败', error);
       }
     }
 
@@ -98,14 +148,14 @@ function simulateClick(element: HTMLElement | null): boolean {
       element.click();
     }
 
-    logger.info(`模拟点击成功：${element.tagName}`, {
+    execLog('info', `模拟点击成功：${element.tagName}`, {
       onclick: onclickAttr,
       text: element.textContent?.trim(),
     });
 
     return true;
   } catch (error) {
-    logger.error('模拟点击异常', error);
+    execLog('error', '模拟点击异常', error);
     return false;
   }
 }
@@ -120,17 +170,17 @@ async function clickCaptchaPopupTab(): Promise<boolean> {
   ) as HTMLElement;
 
   if (!popupTab) {
-    logger.warn('未找到弹出式验证码标签');
+    execLog('warn', '未找到弹出式验证码标签');
     return false;
   }
 
-  logger.info('找到弹出式验证码标签，准备点击');
+  execLog('info', '找到弹出式验证码标签，准备点击');
   const success = simulateClick(popupTab);
 
   if (success) {
-    logger.info('成功点击弹出式验证码标签');
+    execLog('info', '成功点击弹出式验证码标签');
   } else {
-    logger.error('点击弹出式验证码标签失败');
+    execLog('error', '点击弹出式验证码标签失败');
   }
 
   return success;
@@ -146,51 +196,31 @@ async function clickLoginButton(): Promise<boolean> {
   ) as HTMLElement;
 
   if (!loginButton) {
-    logger.warn('未找到登录按钮');
+    execLog('warn', '未找到登录按钮');
     return false;
   }
 
-  logger.info('找到登录按钮，准备点击');
+  execLog('info', '找到登录按钮，准备点击');
   const success = simulateClick(loginButton);
 
   if (success) {
-    logger.info('成功点击登录按钮');
+    execLog('info', '成功点击登录按钮');
   } else {
-    logger.error('点击登录按钮失败');
+    execLog('error', '点击登录按钮失败');
   }
 
   return success;
 }
 
 /**
- * 执行验证码点击流程
+ * 执行验证码流程：等待弹层稳定后，查找拼图/背景图、调 API 取缺口位置并拖动滑块。
+ * 适用于 #imgscode1 内 .verifybox 结构（以及兼容易盾等）。
  */
 async function executeCaptchaClickFlow(): Promise<void> {
-  logger.info('开始执行验证码点击流程');
-
-  // 第一步：点击弹出式标签
-  const tabClickSuccess = await clickCaptchaPopupTab();
-
-  if (!tabClickSuccess) {
-    logger.error('点击弹出式标签失败，终止流程');
-    return;
-  }
-
-  // 等待一下，让界面响应
+  execLog('info', '开始执行验证码流程');
+  await new Promise((resolve) => setTimeout(resolve, 500));
+  execLog('info', '验证码流程就绪，开始识别并滑动');
   await new Promise((resolve) => setTimeout(resolve, 1500));
-
-  // 第二步：点击登录按钮
-  const buttonClickSuccess = await clickLoginButton();
-
-  if (!buttonClickSuccess) {
-    logger.error('点击登录按钮失败');
-    return;
-  }
-
-  logger.info('验证码点击流程执行完成');
-
-  await new Promise((resolve) => setTimeout(resolve, 1500));
-  logger.info('开始获取验证码图片...');
   await getCaptchaImagesAndCallAPIWithRetry(3, 1000);
 }
 
@@ -218,7 +248,7 @@ async function fetchImageAsBase64(url: string): Promise<string> {
       reader.readAsDataURL(blob);
     });
   } catch (error) {
-    logger.error('通过 fetch 获取图片失败:', error);
+    execLog('error', '通过 fetch 获取图片失败:', error);
     throw error;
   }
 }
@@ -237,7 +267,7 @@ async function imageToBase64(imgElement: HTMLImageElement | HTMLCanvasElement): 
         const base64Data = base64.split(',')[1];
         return base64Data;
       } catch (error) {
-        logger.warn('直接从 canvas 获取数据失败，尝试其他方法:', error);
+        execLog('warn', '直接从 canvas 获取数据失败，尝试其他方法:', error);
       }
     }
 
@@ -255,7 +285,7 @@ async function imageToBase64(imgElement: HTMLImageElement | HTMLCanvasElement): 
       try {
         return await fetchImageAsBase64(src);
       } catch (error) {
-        logger.warn('通过 fetch 获取图片失败，尝试 canvas 方法:', error);
+        execLog('warn', '通过 fetch 获取图片失败，尝试 canvas 方法:', error);
       }
     }
 
@@ -321,418 +351,278 @@ async function imageToBase64(imgElement: HTMLImageElement | HTMLCanvasElement): 
 }
 
 /**
- * 查找验证码滑块图片元素（选择第二个）
+ * 查找验证码拼图块图片（滑块上的小图）。
+ * 仅在 #imgscode1 下第一个 .mask 内查找；优先 .verify-sub-block img.bock-backImg，再兼容易盾等。
  */
 function findSliderImage(): HTMLImageElement | HTMLCanvasElement | null {
-  // 尝试多种可能的选择器
-  const selectors = [
-    'img.bock-backImg', // 滑块图片类名（注意拼写：bock-backImg）
-    '.bock-backImg', // 滑块图片类名
-    '.verify-sub-block img', // verify-sub-block 内部的滑块图片
-    'img.yidun_jigsaw', // 直接是 img 元素，类名为 yidun_jigsaw
-    '.yidun_jigsaw', // 类名为 yidun_jigsaw 的元素（通常是 img）
-    '.yidun_jigsaw img', // yidun_jigsaw 内部的 img 子元素（备用）
+  const root = getCaptchaContainer() ?? document;
+
+  // 1) 优先：verifybox 结构中的拼图块（有 src 的优先）
+  const verifyPuzzles = root.querySelectorAll(VERIFY_SELECTORS.puzzleImg);
+  const validVerify = Array.from(verifyPuzzles).filter(
+    (el): el is HTMLImageElement | HTMLCanvasElement =>
+      (el instanceof HTMLImageElement || el instanceof HTMLCanvasElement) &&
+      (el instanceof HTMLCanvasElement || !!(el as HTMLImageElement).src?.trim())
+  );
+  if (validVerify.length > 0) {
+    execLog(
+      'debug',
+      `找到 verifybox 拼图块: ${VERIFY_SELECTORS.puzzleImg}，共 ${validVerify.length} 个`
+    );
+    return validVerify[0];
+  }
+
+  // 2) 兼容：易盾等其它选择器
+  const fallbackSelectors = [
+    'img.bock-backImg',
+    '.verify-sub-block img',
+    '.yidun_jigsaw',
     '.yidun_slider img',
     '.yidun_slider canvas',
     '[class*="jigsaw"] img',
-    '[class*="slider"] img',
-    '[class*="bock"] img', // 包含 bock 的类名
+    '[class*="bock"] img',
   ];
-
-  for (const selector of selectors) {
-    const elements = document.querySelectorAll(selector);
-    // 优先查找有实际图片数据的元素（src 不为空）
-    const validElements: (HTMLImageElement | HTMLCanvasElement)[] = [];
-    for (const el of Array.from(elements)) {
-      if (el instanceof HTMLImageElement || el instanceof HTMLCanvasElement) {
-        // 如果是图片元素，检查 src 是否有值；如果是 canvas，直接添加
-        if (el instanceof HTMLCanvasElement || (el.src && el.src.trim() !== '')) {
-          validElements.push(el);
-        }
-      }
-    }
-
-    if (validElements.length > 1) {
-      // 选择第二个有效元素（索引为1）
-      logger.debug(`找到第二个滑块图片元素: ${selector}，索引: 1`);
-      return validElements[1];
-    } else if (validElements.length === 1) {
-      // 如果只有一个有效元素，也返回它
-      logger.debug(`找到滑块图片元素: ${selector}（只有一个有效元素）`);
-      return validElements[0];
-    } else if (elements.length > 1) {
-      // 如果没有有效元素，但找到了多个元素，返回第二个
-      const element = elements[1];
-      if (
-        element &&
-        (element instanceof HTMLImageElement || element instanceof HTMLCanvasElement)
-      ) {
-        logger.debug(`找到第二个滑块图片元素（但可能无图片数据）: ${selector}，索引: 1`);
-        return element;
-      }
-    } else if (elements.length === 1) {
-      // 如果只有一个元素，也返回它
-      const element = elements[0];
-      if (
-        element &&
-        (element instanceof HTMLImageElement || element instanceof HTMLCanvasElement)
-      ) {
-        logger.debug(`找到滑块图片元素（但可能无图片数据）: ${selector}（只有一个元素）`);
-        return element;
-      }
+  for (const selector of fallbackSelectors) {
+    const elements = root.querySelectorAll(selector);
+    const valid = Array.from(elements).filter(
+      (el): el is HTMLImageElement | HTMLCanvasElement =>
+        (el instanceof HTMLImageElement || el instanceof HTMLCanvasElement) &&
+        (el instanceof HTMLCanvasElement || !!(el as HTMLImageElement).src?.trim())
+    );
+    if (valid.length > 0) {
+      execLog('debug', `找到滑块图片: ${selector}`);
+      return valid[0];
     }
   }
 
-  // 如果找不到，尝试查找所有图片，通过类名和尺寸判断
-  const allImages = Array.from(document.querySelectorAll('img, canvas'));
-  const matchedImages: (HTMLImageElement | HTMLCanvasElement)[] = [];
-
-  for (const img of allImages) {
-    if (img instanceof HTMLImageElement || img instanceof HTMLCanvasElement) {
-      // 跳过没有图片数据的元素
-      if (img instanceof HTMLImageElement && (!img.src || img.src.trim() === '')) {
-        continue;
-      }
-
-      // 检查元素本身的类名
-      const className = img.className || '';
-      if (
-        className.includes('jigsaw') ||
-        className.includes('slider') ||
-        className.includes('bock-backImg') ||
-        className === 'bock-backImg'
-      ) {
-        matchedImages.push(img);
-      } else {
-        // 滑块图片通常比较小，宽度在 50-100px 左右
-        const width = img instanceof HTMLImageElement ? img.naturalWidth || img.width : img.width;
-        if (width >= 40 && width <= 120) {
-          const parent = img.parentElement;
-          if (
-            parent &&
-            (parent.className.includes('slider') ||
-              parent.className.includes('jigsaw') ||
-              parent.className.includes('verify-sub-block') ||
-              parent.className.includes('verify-move-block'))
-          ) {
-            matchedImages.push(img);
-          }
-        }
-      }
-    }
-  }
-
-  // 选择第二个匹配的图片
-  if (matchedImages.length > 1) {
-    logger.debug(`通过类名和尺寸找到第二个滑块图片，总共有 ${matchedImages.length} 个匹配项`);
-    return matchedImages[1];
-  } else if (matchedImages.length === 1) {
-    logger.debug('通过类名和尺寸找到滑块图片（只有一个匹配项）');
-    return matchedImages[0];
-  }
-
-  logger.warn('未找到滑块图片元素');
+  execLog('warn', '未找到滑块图片元素');
   return null;
 }
 
 /**
- * 查找验证码背景图片元素（选择第二个）
+ * 查找验证码背景图（大图）。
+ * 仅在 #imgscode1 下第一个 .mask 内查找；优先 .verify-img-panel img.backImg，再兼容易盾等。
  */
 function findBackgroundImage(): HTMLImageElement | HTMLCanvasElement | null {
-  // 尝试多种可能的选择器
-  const selectors = [
-    'img.backImg', // 背景图片类名
-    '.backImg', // 背景图片类名
-    '.verify-img-panel img', // verify-img-panel 内部的背景图片
+  const root = getCaptchaContainer() ?? document;
+
+  // 1) 优先：verifybox 结构中的背景图
+  const verifyBg = root.querySelectorAll(VERIFY_SELECTORS.bgImg);
+  const validVerify = Array.from(verifyBg).filter(
+    (el): el is HTMLImageElement | HTMLCanvasElement =>
+      (el instanceof HTMLImageElement || el instanceof HTMLCanvasElement) &&
+      (el instanceof HTMLCanvasElement || !!(el as HTMLImageElement).src?.trim())
+  );
+  if (validVerify.length > 0) {
+    execLog(
+      'debug',
+      `找到 verifybox 背景图: ${VERIFY_SELECTORS.bgImg}，共 ${validVerify.length} 个`
+    );
+    return validVerify[0];
+  }
+
+  // 2) 兼容：易盾等
+  const fallbackSelectors = [
+    'img.backImg',
+    '.verify-img-panel img',
     '.yidun_bg-img',
-    '.yidun_bgimg',
     '.yidun_bg img',
     '.yidun_bg canvas',
     '[class*="bg"] img',
-    '[class*="background"] img',
-    'img[class*="bg"]',
-    'canvas[class*="bg"]',
   ];
-
-  for (const selector of selectors) {
-    const elements = document.querySelectorAll(selector);
-    // 优先查找有实际图片数据的元素（src 不为空）
-    const validElements: (HTMLImageElement | HTMLCanvasElement)[] = [];
-    for (const el of Array.from(elements)) {
-      if (el instanceof HTMLImageElement || el instanceof HTMLCanvasElement) {
-        // 如果是图片元素，检查 src 是否有值；如果是 canvas，直接添加
-        if (el instanceof HTMLCanvasElement || (el.src && el.src.trim() !== '')) {
-          validElements.push(el);
-        }
-      }
-    }
-
-    if (validElements.length > 1) {
-      // 选择第二个有效元素（索引为1）
-      logger.debug(`找到第二个背景图片元素: ${selector}，索引: 1`);
-      return validElements[1];
-    } else if (validElements.length === 1) {
-      // 如果只有一个有效元素，也返回它
-      logger.debug(`找到背景图片元素: ${selector}（只有一个有效元素）`);
-      return validElements[0];
-    } else if (elements.length > 1) {
-      // 如果没有有效元素，但找到了多个元素，返回第二个
-      const element = elements[1];
-      if (
-        element &&
-        (element instanceof HTMLImageElement || element instanceof HTMLCanvasElement)
-      ) {
-        logger.debug(`找到第二个背景图片元素（但可能无图片数据）: ${selector}，索引: 1`);
-        return element;
-      }
-    } else if (elements.length === 1) {
-      // 如果只有一个元素，也返回它
-      const element = elements[0];
-      if (
-        element &&
-        (element instanceof HTMLImageElement || element instanceof HTMLCanvasElement)
-      ) {
-        logger.debug(`找到背景图片元素（但可能无图片数据）: ${selector}（只有一个元素）`);
-        return element;
-      }
+  for (const selector of fallbackSelectors) {
+    const elements = root.querySelectorAll(selector);
+    const valid = Array.from(elements).filter(
+      (el): el is HTMLImageElement | HTMLCanvasElement =>
+        (el instanceof HTMLImageElement || el instanceof HTMLCanvasElement) &&
+        (el instanceof HTMLCanvasElement || !!(el as HTMLImageElement).src?.trim())
+    );
+    if (valid.length > 0) {
+      execLog('debug', `找到背景图: ${selector}`);
+      return valid[0];
     }
   }
 
-  // 如果找不到，尝试查找所有图片，通过尺寸判断
-  const allImages = Array.from(document.querySelectorAll('img, canvas'));
-  const matchedImages: (HTMLImageElement | HTMLCanvasElement)[] = [];
-
-  for (const img of allImages) {
-    if (img instanceof HTMLImageElement || img instanceof HTMLCanvasElement) {
-      // 跳过没有图片数据的元素
-      if (img instanceof HTMLImageElement && (!img.src || img.src.trim() === '')) {
-        continue;
-      }
-
-      // 检查元素本身的类名
-      const className = img.className || '';
-      if (className.includes('backImg') || className === 'backImg') {
-        matchedImages.push(img);
-      } else {
-        // 背景图片通常比较大，宽度在 300px 以上
-        const width = img instanceof HTMLImageElement ? img.naturalWidth || img.width : img.width;
-        if (width >= 250) {
-          const parent = img.parentElement;
-          if (
-            parent &&
-            (parent.className.includes('bg') ||
-              parent.className.includes('background') ||
-              parent.className.includes('verify-img-panel'))
-          ) {
-            matchedImages.push(img);
-          }
-        }
-      }
-    }
-  }
-
-  // 选择第二个匹配的图片
-  if (matchedImages.length > 1) {
-    logger.debug(`通过尺寸判断找到第二个背景图片，总共有 ${matchedImages.length} 个匹配项`);
-    return matchedImages[1];
-  } else if (matchedImages.length === 1) {
-    logger.debug('通过尺寸判断找到背景图片（只有一个匹配项）');
-    return matchedImages[0];
-  }
-
-  logger.warn('未找到背景图片元素');
+  execLog('warn', '未找到背景图片元素');
   return null;
 }
 
+const SLIDER_POSITION_TIMEOUT_MS = 30000;
+
 /**
- * 调用 API 获取滑块位置百分比（通过 background script 避免跨域问题）
+ * 通过 postMessage 请求 content → background 调用 API，获取滑块位置百分比（页面上下文无 chrome.*）
  * @param targetBase64 滑块图片 base64
  * @param backgroundBase64 背景图片 base64
  * @returns 滑块位置百分比（0-100）
  */
 async function getSliderPosition(targetBase64: string, backgroundBase64: string): Promise<number> {
+  const requestId = `slider-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
   return new Promise((resolve, reject) => {
-    try {
-      // 通过 chrome.runtime.sendMessage 发送消息给 background script
-      chrome.runtime.sendMessage(
-        {
-          type: 'slider-position-api',
-          data: {
-            target_base64: targetBase64,
-            background_base64: backgroundBase64,
-          },
-        },
-        (response) => {
-          // 检查是否有错误
-          if (chrome.runtime.lastError) {
-            logger.error('发送消息失败:', chrome.runtime.lastError);
-            reject(new Error(chrome.runtime.lastError.message));
-            return;
-          }
+    const timeoutId = setTimeout(() => {
+      cleanup();
+      reject(new Error('滑块位置 API 请求超时'));
+    }, SLIDER_POSITION_TIMEOUT_MS);
 
-          if (!response) {
-            reject(new Error('未收到响应'));
-            return;
-          }
+    const cleanup = () => {
+      clearTimeout(timeoutId);
+      window.removeEventListener('message', onResponse);
+    };
 
-          if (response.success) {
-            logger.debug('API 返回数据:', response);
-            resolve(response.percentage);
-          } else {
-            reject(new Error(response.error || 'API 请求失败'));
-          }
-        }
-      );
-    } catch (error) {
-      logger.error('调用 API 失败:', error);
-      reject(error);
-    }
+    const onResponse = (event: MessageEvent) => {
+      if (event.source !== window || !event.data?.message) return;
+      if (event.data.type !== EXECUTION_TYPE.SLIDER_POSITION_RESPONSE) return;
+      let payload: { requestId?: string; success?: boolean; percentage?: number; error?: string };
+      try {
+        payload =
+          typeof event.data.message === 'string'
+            ? JSON.parse(event.data.message)
+            : event.data.message;
+      } catch {
+        return;
+      }
+      if (payload.requestId !== requestId) return;
+      cleanup();
+      if (payload.success && typeof payload.percentage === 'number') {
+        execLog('debug', 'API 返回数据', payload);
+        resolve(payload.percentage);
+      } else {
+        reject(new Error(payload.error || 'API 请求失败'));
+      }
+    };
+
+    window.addEventListener('message', onResponse);
+    window.postMessage(
+      {
+        type: EXECUTION_TYPE.SLIDER_POSITION_REQUEST,
+        message: JSON.stringify({
+          requestId,
+          targetBase64,
+          backgroundBase64,
+        }),
+      },
+      '*'
+    );
   });
 }
 
 /**
- * 模拟拖动滑块到指定位置
- * @param percentage 目标位置百分比（0-100）
+ * 解析滑块元素 style.left 得到当前 left 像素值（如 "142.444px" -> 142.444）
+ */
+function parseSliderLeftPx(el: HTMLElement): number {
+  const left = el.style.left || '';
+  const match = left.match(/^([\d.]+)px$/);
+  if (match) return parseFloat(match[1]) || 0;
+  return parseInt(left, 10) || 0;
+}
+
+/**
+ * 模拟拖动滑块到指定位置（0–100%）。
+ * 仅在 #imgscode1 下第一个 .mask 内查找；优先 .verify-move-block + .verify-bar-area，兼容易盾。
  */
 async function slideToPosition(percentage: number): Promise<boolean> {
   try {
-    // 查找滑块容器 yidun_control（选择第二个）
-    const containers = document.querySelectorAll('.yidun_control');
-    let sliderContainer: HTMLElement | null = null;
+    const root = getCaptchaContainer() ?? document;
+    let slider: HTMLElement;
+    let sliderContainer: HTMLElement;
+    let containerWidth: number;
 
-    if (containers.length > 1) {
-      // 选择第二个容器（索引为1）
-      sliderContainer = containers[1] as HTMLElement;
-      logger.debug(`找到第二个滑块容器 .yidun_control，总共有 ${containers.length} 个`);
-    } else if (containers.length === 1) {
-      // 如果只有一个容器，也使用它
-      sliderContainer = containers[0] as HTMLElement;
-      logger.debug('找到滑块容器 .yidun_control（只有一个元素）');
+    // 1) 优先：verifybox 结构 .verify-move-block + .verify-bar-area
+    const moveBlocks = root.querySelectorAll(VERIFY_SELECTORS.moveBlock);
+    const barAreas = root.querySelectorAll(VERIFY_SELECTORS.barArea);
+    if (moveBlocks.length > 0 && barAreas.length > 0) {
+      slider = moveBlocks[0] as HTMLElement;
+      sliderContainer = barAreas[0] as HTMLElement;
+      containerWidth =
+        sliderContainer.clientWidth ||
+        sliderContainer.offsetWidth ||
+        sliderContainer.getBoundingClientRect().width;
+      if (!containerWidth) {
+        const bg = findBackgroundImage();
+        if (bg) containerWidth = bg.getBoundingClientRect().width;
+      }
+      execLog('debug', `使用 verifybox 滑块与轨道，容器宽: ${containerWidth}`);
     } else {
-      logger.error('未找到滑块容器 .yidun_control');
-      return false;
-    }
-
-    if (!sliderContainer) {
-      logger.error('滑块容器元素无效');
-      return false;
-    }
-
-    // 在容器内查找实际的滑块元素 yidun_slider（这是需要拖动的元素）
-    const slider = sliderContainer.querySelector('.yidun_slider') as HTMLElement;
-    if (!slider) {
-      logger.error('未找到滑块元素 .yidun_slider');
-      return false;
-    }
-
-    logger.debug('找到滑块元素 .yidun_slider');
-
-    // 获取容器宽度（尝试多种方式）
-    let containerWidth = sliderContainer.clientWidth || sliderContainer.offsetWidth;
-
-    // 如果还是获取不到，尝试使用 getBoundingClientRect
-    if (!containerWidth || containerWidth === 0) {
-      const containerRect = sliderContainer.getBoundingClientRect();
-      containerWidth = containerRect.width;
-    }
-
-    // 如果还是获取不到，尝试查找背景图片的宽度作为参考
-    if (!containerWidth || containerWidth === 0) {
-      const backgroundImage = findBackgroundImage();
-      if (backgroundImage) {
-        const bgRect = backgroundImage.getBoundingClientRect();
-        containerWidth = bgRect.width;
-        logger.debug('使用背景图片宽度作为容器宽度:', containerWidth);
+      // 2) 兼容：易盾
+      const containers = root.querySelectorAll(VERIFY_SELECTORS.yidunContainer);
+      const container = containers[0];
+      slider = container?.querySelector(VERIFY_SELECTORS.yidunSlider) as HTMLElement;
+      sliderContainer = container as HTMLElement;
+      if (!slider || !sliderContainer) {
+        execLog('error', '未找到滑块或容器（.verify-move-block / .yidun_control）');
+        return false;
+      }
+      containerWidth =
+        sliderContainer.clientWidth ||
+        sliderContainer.offsetWidth ||
+        sliderContainer.getBoundingClientRect().width;
+      if (!containerWidth) {
+        const bg = findBackgroundImage();
+        if (bg) containerWidth = bg.getBoundingClientRect().width;
       }
     }
 
     if (!containerWidth || containerWidth === 0) {
-      logger.error('无法获取容器宽度', {
-        clientWidth: sliderContainer.clientWidth,
-        offsetWidth: sliderContainer.offsetWidth,
-        scrollWidth: sliderContainer.scrollWidth,
-        boundingRect: sliderContainer.getBoundingClientRect(),
-      });
+      execLog('error', '无法获取轨道宽度');
       return false;
     }
 
-    logger.debug('获取到容器宽度:', containerWidth);
-
-    // 重新获取元素位置（确保是最新的）
     const sliderRect = slider.getBoundingClientRect();
+    const currentLeft = parseSliderLeftPx(slider);
+    // 目标 left：轨道宽度 * 百分比；verifybox 的 left 即为滑块左边缘位置
+    const targetLeft = (containerWidth * percentage) / 100;
+    const distance = targetLeft - currentLeft;
 
-    // 计算目标位置（像素）- 相对于容器
-    const targetX = (containerWidth * percentage) / 100 + sliderRect.width / 2 - 10;
-
-    // 获取滑块当前位置（相对于容器）- yidun_slider 的 left 位置
-    const currentLeft = parseInt(slider.style.left) || 0;
-    const currentX = currentLeft;
-
-    // 计算需要移动的距离
-    const distance = targetX - currentX;
-
-    logger.debug(
-      `开始拖动滑块: 当前位置 ${currentX}px (left: ${currentLeft}px), 目标位置 ${targetX}px, 需要移动 ${distance}px`
+    execLog(
+      'debug',
+      `拖动: left 从 ${currentLeft}px 到 ${targetLeft}px (${percentage}%), 距离 ${distance}px`
     );
 
-    // 确保元素可见
     if (slider.offsetParent === null) {
       slider.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      await new Promise((resolve) => setTimeout(resolve, 300));
+      await new Promise((r) => setTimeout(r, 300));
     }
 
-    // 获取滑块的中心点坐标
-    const sliderCenterX = sliderRect.left + sliderRect.width / 2;
-    const sliderCenterY = sliderRect.top + sliderRect.height / 2;
+    const startX = sliderRect.left + sliderRect.width / 2;
+    const startY = sliderRect.top + sliderRect.height / 2;
 
-    // 模拟 mousedown（在滑块上）
-    const mouseDownEvent = new MouseEvent('mousedown', {
+    const mouseDown = new MouseEvent('mousedown', {
       bubbles: true,
       cancelable: true,
       view: window,
       button: 0,
       buttons: 1,
-      clientX: sliderCenterX,
-      clientY: sliderCenterY,
+      clientX: startX,
+      clientY: startY,
     });
-    slider.dispatchEvent(mouseDownEvent);
-    // 也在容器上触发，因为有些实现可能监听容器
-    sliderContainer.dispatchEvent(mouseDownEvent);
+    slider.dispatchEvent(mouseDown);
+    sliderContainer.dispatchEvent(mouseDown);
+    await new Promise((r) => setTimeout(r, 50));
 
-    // 等待一下
-    await new Promise((resolve) => setTimeout(resolve, 50));
-
-    // 模拟拖动过程（分多步，模拟人类拖动）
-    const steps = 20; // 分20步完成拖动
-    const stepDistance = distance / steps;
-    const stepDelay = 10; // 每步延迟10ms
-
+    const steps = 20;
+    const stepDist = distance / steps;
+    const stepDelay = 10;
     for (let i = 1; i <= steps; i++) {
-      const currentStepX = sliderCenterX + stepDistance * i;
-      const currentStepY = sliderCenterY + Math.sin((i / steps) * Math.PI) * 2; // 添加轻微的垂直抖动，模拟人类拖动
-
-      const mouseMoveEvent = new MouseEvent('mousemove', {
+      const x = startX + stepDist * i;
+      const y = startY + Math.sin((i / steps) * Math.PI) * 2;
+      const move = new MouseEvent('mousemove', {
         bubbles: true,
         cancelable: true,
         view: window,
         button: 0,
         buttons: 1,
-        clientX: currentStepX,
-        clientY: currentStepY,
+        clientX: x,
+        clientY: y,
       });
-      slider.dispatchEvent(mouseMoveEvent);
-      sliderContainer.dispatchEvent(mouseMoveEvent);
-      document.dispatchEvent(mouseMoveEvent);
-
-      await new Promise((resolve) => setTimeout(resolve, stepDelay));
+      slider.dispatchEvent(move);
+      sliderContainer.dispatchEvent(move);
+      document.dispatchEvent(move);
+      await new Promise((r) => setTimeout(r, stepDelay));
     }
 
-    // 最终位置
-    const finalX = sliderCenterX + distance;
-    const finalY = sliderCenterY;
-
-    // 最后一次 mousemove 到精确位置
-    const finalMouseMoveEvent = new MouseEvent('mousemove', {
+    const finalX = startX + distance;
+    const finalY = startY;
+    const finalMove = new MouseEvent('mousemove', {
       bubbles: true,
       cancelable: true,
       view: window,
@@ -741,14 +631,12 @@ async function slideToPosition(percentage: number): Promise<boolean> {
       clientX: finalX,
       clientY: finalY,
     });
-    slider.dispatchEvent(finalMouseMoveEvent);
-    sliderContainer.dispatchEvent(finalMouseMoveEvent);
-    document.dispatchEvent(finalMouseMoveEvent);
+    slider.dispatchEvent(finalMove);
+    sliderContainer.dispatchEvent(finalMove);
+    document.dispatchEvent(finalMove);
+    await new Promise((r) => setTimeout(r, 50));
 
-    await new Promise((resolve) => setTimeout(resolve, 50));
-
-    // 模拟 mouseup
-    const mouseUpEvent = new MouseEvent('mouseup', {
+    const mouseUp = new MouseEvent('mouseup', {
       bubbles: true,
       cancelable: true,
       view: window,
@@ -757,14 +645,14 @@ async function slideToPosition(percentage: number): Promise<boolean> {
       clientX: finalX,
       clientY: finalY,
     });
-    slider.dispatchEvent(mouseUpEvent);
-    sliderContainer.dispatchEvent(mouseUpEvent);
-    document.dispatchEvent(mouseUpEvent);
+    slider.dispatchEvent(mouseUp);
+    sliderContainer.dispatchEvent(mouseUp);
+    document.dispatchEvent(mouseUp);
 
-    logger.info(`滑块拖动完成，已移动到 ${percentage}% 位置`);
+    execLog('info', `滑块已移动到 ${percentage}%`);
     return true;
   } catch (error) {
-    logger.error('拖动滑块失败:', error);
+    execLog('error', '拖动滑块失败:', error);
     return false;
   }
 }
@@ -773,12 +661,12 @@ async function slideToPosition(percentage: number): Promise<boolean> {
  * 获取验证码图片并调用 API
  */
 async function getCaptchaImagesAndCallAPI(): Promise<number | null> {
-  logger.debug('开始获取验证码图片...');
+  execLog('debug', '开始获取验证码图片...');
 
   // 查找滑块图片
   const sliderImage = findSliderImage();
   if (!sliderImage) {
-    logger.error('未找到滑块图片');
+    execLog('error', '未找到滑块图片');
     return null;
   }
 
@@ -795,7 +683,7 @@ async function getCaptchaImagesAndCallAPI(): Promise<number | null> {
   // 查找背景图片
   const backgroundImage = findBackgroundImage();
   if (!backgroundImage) {
-    logger.error('未找到背景图片');
+    execLog('error', '未找到背景图片');
     return null;
   }
 
@@ -811,18 +699,18 @@ async function getCaptchaImagesAndCallAPI(): Promise<number | null> {
 
   try {
     // 转换为 base64
-    logger.debug('正在转换滑块图片为 base64...');
+    execLog('debug', '正在转换滑块图片为 base64...');
     const targetBase64 = await imageToBase64(sliderImage);
-    logger.debug('滑块图片 base64 长度:', targetBase64.length);
+    execLog('debug', '滑块图片 base64 长度:', targetBase64.length);
 
-    logger.debug('正在转换背景图片为 base64...');
+    execLog('debug', '正在转换背景图片为 base64...');
     const backgroundBase64 = await imageToBase64(backgroundImage);
-    logger.debug('背景图片 base64 长度:', backgroundBase64.length);
+    execLog('debug', '背景图片 base64 长度:', backgroundBase64.length);
 
     // 调用 API
-    logger.debug('正在调用 API 获取滑块位置...');
+    execLog('debug', '正在调用 API 获取滑块位置...');
     const percentage = await getSliderPosition(targetBase64, backgroundBase64);
-    logger.info(`获取到滑块位置百分比: ${percentage}%`);
+    execLog('info', `获取到滑块位置百分比: ${percentage}%`);
     await new Promise((resolve) => setTimeout(resolve, 500));
 
     // 滑动滑块到目标位置
@@ -830,7 +718,7 @@ async function getCaptchaImagesAndCallAPI(): Promise<number | null> {
 
     return percentage;
   } catch (error) {
-    logger.error('处理验证码图片失败:', error);
+    execLog('error', '处理验证码图片失败:', error);
     return null;
   }
 }
@@ -848,32 +736,32 @@ async function getCaptchaImagesAndCallAPIWithRetry(
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      logger.info(`尝试获取验证码图片 (第 ${attempt}/${maxRetries} 次)...`);
+      execLog('info', `尝试获取验证码图片 (第 ${attempt}/${maxRetries} 次)...`);
       const result = await getCaptchaImagesAndCallAPI();
 
       if (result !== null) {
-        logger.info(`成功获取验证码位置: ${result}%`);
+        execLog('info', `成功获取验证码位置: ${result}%`);
         return result;
       } else {
         // 如果返回 null，说明某些步骤失败了，继续重试
-        logger.warn(`第 ${attempt} 次尝试返回 null，准备重试...`);
+        execLog('warn', `第 ${attempt} 次尝试返回 null，准备重试...`);
         lastError = new Error('获取验证码图片返回 null');
       }
     } catch (error) {
-      logger.error(`第 ${attempt} 次尝试失败:`, error);
+      execLog('error', `第 ${attempt} 次尝试失败:`, error);
       lastError = error instanceof Error ? error : new Error(String(error));
     }
 
     // 如果不是最后一次尝试，等待后重试
     if (attempt < maxRetries) {
-      logger.debug(`等待 ${retryDelay}ms 后重试...`);
+      execLog('debug', `等待 ${retryDelay}ms 后重试...`);
       await new Promise((resolve) => setTimeout(resolve, retryDelay));
     }
   }
 
-  logger.error(`所有 ${maxRetries} 次尝试都失败了`);
+  execLog('error', `所有 ${maxRetries} 次尝试都失败了`);
   if (lastError) {
-    logger.error('最后一次错误:', lastError);
+    execLog('error', '最后一次错误:', lastError);
   }
   return null;
 }

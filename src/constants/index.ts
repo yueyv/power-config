@@ -65,7 +65,9 @@ export enum EXECUTION_TYPE {
   TRADE_END = 'trade_end',
   NEXT_CHOICE = 'next_choice',
   SLIDER_VALID = 'slider_valid',
-  MANUAL_TRADE = 'manual_trade',
-  /** 请求 execution 重新解析页面表格并同步最新挂牌数据 */
+  /** 页面请求滑块位置 API（postMessage 桥接，由 content 转发 background） */
+  SLIDER_POSITION_REQUEST = 'slider_position_request',
+  /** content 回传滑块位置 API 结果给页面 */
+  SLIDER_POSITION_RESPONSE = 'slider_position_response',
   REQUEST_SELL_DATA = 'request_sell_data',
 }

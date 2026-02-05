@@ -73,9 +73,10 @@ import 'element-plus/theme-chalk/el-message.css';
 import 'element-plus/theme-chalk/el-message-box.css';
 import 'element-plus/theme-chalk/el-dialog.css';
 import 'element-plus/theme-chalk/el-checkbox.css';
+import 'element-plus/theme-chalk/el-input.css';
 import 'element-plus/theme-chalk/el-table-v2.css';
-import { computed, h, onMounted, onUnmounted, ref, watch } from 'vue';
-import { CheckboxValueType, ElButton, ElCheckbox, ElMessageBox } from 'element-plus';
+import { computed, h, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
+import { CheckboxValueType, ElButton, ElCheckbox, ElInput, ElMessageBox } from 'element-plus';
 import { TRADE_STATUS } from '@/constants';
 import { getTimeLeftMs } from '@/utils/tradePriority';
 import {
@@ -84,7 +85,7 @@ import {
   setTradeElectricityVolume,
 } from '@/model/sellData';
 const electricityVolume = ref(0);
-const emits = defineEmits(['trade', 'manual-trade', 'cancel', 'reset', 'continue']);
+const emits = defineEmits(['trade', 'cancel', 'reset', 'continue']);
 const props = defineProps<{
   diaelecHeight?: number;
   data: SELL_DATA_ITEM[];
@@ -93,6 +94,8 @@ const props = defineProps<{
 }>();
 
 const choiceSellData = ref<number[]>([]);
+/** 每行手动填写的购买电量（gpid -> 电量），仅对选中行生效；未填时用剩余电量或拟交易分配值 */
+const manualElecVolume = reactive<Record<number, number>>({});
 /** 每秒更新，用于驱动倒计时列用「当前时间戳」与「摘牌时间戳」重新计算并刷新 */
 const countdownTick = ref(0);
 
@@ -107,6 +110,21 @@ watch(
     orderedViewData.value = [...el].sort((a, b) => (a.gpdj ?? 0) - (b.gpdj ?? 0));
   },
   { immediate: true }
+);
+
+/** 选中行变化时，为新选中的行初始化购买电量为该行剩余电量 */
+watch(
+  () => [...choiceSellData.value],
+  (gpids) => {
+    const list = orderedViewData.value;
+    gpids.forEach((gpid) => {
+      if (manualElecVolume[gpid] === undefined) {
+        const item = list.find((r) => r.gpid === gpid);
+        manualElecVolume[gpid] = item?.sydl ?? 0;
+      }
+    });
+  },
+  { deep: true }
 );
 
 /** 选中项按挂牌价格 + 倒计时排序：价格升序，同价则无倒计时在前、再按剩余时间升序 */
@@ -130,10 +148,16 @@ function sortSelectedByPriceAndCountdown(gpids: number[]): number[] {
 }
 
 const choiceSellDataTotal = computed(() => {
-  return choiceSellData.value.reduce(
-    (acc, curr) => acc + (orderedViewData.value.find((item) => item.gpid === curr)?.sydl || 0),
-    0
-  );
+  const list = orderedViewData.value;
+  return choiceSellData.value.reduce((acc, gpid) => {
+    const item = list.find((r) => r.gpid === gpid);
+    const vol =
+      item &&
+      (manualElecVolume[gpid] !== undefined && Number.isFinite(manualElecVolume[gpid])
+        ? Math.min(Math.max(0, manualElecVolume[gpid]), item.sydl)
+        : item.sydl);
+    return acc + (vol ?? 0);
+  }, 0);
 });
 
 /** 在 choiceSellData 内上移交易顺序（仅对已参与交易的项生效） */
@@ -252,7 +276,6 @@ const columns = ref<any>([
     width: 60,
     align: 'center',
     cellRenderer: ({ rowData }: { rowData: SELL_DATA_ITEM }) => {
-      console.log(choiceSellData.value);
       const idx = choiceSellData.value.indexOf(rowData.gpid);
       if (idx < 0) return h('span', { class: 'order-empty' }, '—');
       return h('span', { class: 'order-num' }, String(idx + 1));
@@ -284,32 +307,50 @@ const columns = ref<any>([
       ]);
     },
   },
-  {
-    key: 'manualAction',
-    title: '操作',
-    width: 80,
-    align: 'center',
-    cellRenderer: ({ rowData }: { rowData: SELL_DATA_ITEM }) => {
-      return h(
-        ElButton,
-        {
-          size: 'small',
-          type: 'primary',
-          plain: true,
-          disabled: props.tradeStatus !== TRADE_STATUS.DISPLAY,
-          onClick: () => scrollToRow(rowData),
-        },
-        () => '定位'
-      );
-    },
-  },
 
   {
-    key: 'gpid',
-    title: '唯一id',
-    width: 100,
+    key: 'buyVolume',
+    title: '购买电量',
+    width: 120,
     align: 'center',
-    dataKey: 'gpid',
+    cellRenderer: ({ rowData }: { rowData: SELL_DATA_ITEM }) => {
+      const isSelected = choiceSellData.value.includes(rowData.gpid);
+      const current = manualElecVolume[rowData.gpid] ?? (isSelected ? rowData.sydl : 0);
+      return h('div', { class: 'buy-volume-cell' }, [
+        h(ElInput, {
+          modelValue: current,
+          type: 'number',
+          min: 0,
+          max: rowData.sydl,
+          size: 'small',
+          disabled: !isSelected || props.tradeStatus !== TRADE_STATUS.DISPLAY,
+          placeholder: '电量',
+          class: 'buy-volume-input',
+          'onUpdate:modelValue': (v: number | string) => {
+            const n = typeof v === 'number' ? v : Number(v);
+            const val = Number.isFinite(n) ? Math.max(0, n) : 0;
+            manualElecVolume[rowData.gpid] = val;
+          },
+        }),
+      ]);
+    },
+  },
+  {
+    key: 'hybdsj',
+    title: '合约标的时间',
+    width: 180,
+    align: 'center',
+    cellRenderer: ({ rowData }: { rowData: SELL_DATA_ITEM }) => {
+      const raw = rowData.hybdsj?.trim() || '';
+      if (!raw) return h('span', { class: 'hybdsj-cell' }, '—');
+      // 格式化为 2026-02-12~2026-02-13：日期 / 转 -，区间用 ~ 连接
+      let normalized = raw.replace(/\//g, '-');
+      normalized = normalized.replace(/\s*[至到]\s*/g, '~');
+      // 两个 YYYY-MM-DD 之间的连字符改为 ~
+      normalized = normalized.replace(/(\d{4}-\d{2}-\d{2})-(\d{4}-\d{2}-\d{2})/, '$1~$2');
+      normalized = normalized.replace(/\s+/g, ' ').trim();
+      return h('span', { class: 'hybdsj-cell' }, normalized || '—');
+    },
   },
   {
     key: 'gpdl',
@@ -353,6 +394,13 @@ const columns = ref<any>([
     align: 'center',
     dataKey: 'bfcj',
   },
+  {
+    key: 'gpid',
+    title: '唯一id',
+    width: 100,
+    align: 'center',
+    dataKey: 'gpid',
+  },
 ]);
 
 /** 确认并发送交易；发送后由父组件立刻显示等待倒计时（若有） */
@@ -375,28 +423,22 @@ async function handleTradeClick() {
 
 const buildTradeData = (): { id: number; elecVolume: number }[] => {
   const tradeData: { id: number; elecVolume: number }[] = [];
-  let currentVolume = 0;
+  let remainingTotal = electricityVolume.value;
   const list = orderedViewData.value;
   choiceSellData.value.forEach((gpid) => {
     const item = list.find((r) => r.gpid === gpid);
     if (!item) return;
-    if (currentVolume + item.sydl <= electricityVolume.value) {
-      currentVolume += item.sydl;
-      tradeData.push({ id: item.gpid, elecVolume: item.sydl });
-    } else {
-      tradeData.push({
-        id: item.gpid,
-        elecVolume: electricityVolume.value - currentVolume,
-      });
-    }
+    const manual = manualElecVolume[gpid];
+    const vol =
+      manual !== undefined && Number.isFinite(manual)
+        ? Math.min(Math.max(0, manual), item.sydl)
+        : Math.min(item.sydl, Math.max(0, remainingTotal));
+    if (vol <= 0) return;
+    remainingTotal -= vol;
+    tradeData.push({ id: item.gpid, elecVolume: vol });
   });
   return tradeData;
 };
-
-/** 操作列：仅滚动到该行对应的交易项（单列定位） */
-function scrollToRow(row: SELL_DATA_ITEM) {
-  emits('manual-trade', [{ id: row.gpid, elecVolume: row.sydl ?? 0 }]);
-}
 
 const handleCancelClick = async () => {
   await ElMessageBox.confirm(`确定要终止交易吗？`, '提示', {
@@ -485,6 +527,17 @@ onUnmounted(() => {
 .elec-table {
   flex: 1;
   overflow: hidden;
+
+  .buy-volume-cell {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+  }
+
+  .buy-volume-input {
+    width: 90px;
+  }
 
   :deep(.el-table-v2__header-row) {
     background: #fafafa;

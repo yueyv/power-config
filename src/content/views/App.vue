@@ -1,14 +1,13 @@
 <template>
   <el-config-provider :locale="zhCn">
     <Affix @choose="handleClick" :trade-status="tradeStatus"> </Affix>
-    <el-dialog v-model="visible" width="840px" draggable>
+    <el-dialog v-model="visible" width="1240px" draggable>
       <trade-viewer
-        class="h-60"
+        class="h-70"
         :data="sellData"
         :trade-status="tradeStatus"
         :actual-electricity-volume="actualElectricityVolume"
         @trade="handleTrade"
-        @manual-trade="handleManualTrade"
         @cancel="handleCancel"
         @reset="handleReset"
         @continue="handleContinue"
@@ -83,13 +82,13 @@ const {
   resetTradeIframe,
   actualElectricityVolume,
   continueTradeIframe,
-  manualScrollIframe,
   requestSyncSellData,
 } = useBackgroundConnection({ showWaitCountdown });
 const visible = ref(false);
 let syncTimer: ReturnType<typeof setInterval> | null = null;
 const handleClick = () => {
   visible.value = true;
+  initIframe();
 };
 watch(visible, (v) => {
   if (syncTimer) {
@@ -115,8 +114,7 @@ const handleTrade = (data: { id: number; elecVolume: number }[]) => {
   const hasCountdown = ms !== null && ms > 0;
 
   if (hasCountdown && firstId != null) {
-    // 有倒计时：先定位到对应交易（高亮并滚动），再显示等待浮层，倒计时结束后再向 execution 发送交易请求
-    manualScrollIframe([data[0]]);
+    // 有倒计时：显示等待浮层，倒计时结束后再向 execution 发送交易请求
     pendingTradeDataAfterWait = data;
     if (nextWaitTimer) clearInterval(nextWaitTimer);
     nextWaitTip.value = '首笔交易需等待以下时间后可摘牌：';
@@ -149,9 +147,6 @@ const handleTrade = (data: { id: number; elecVolume: number }[]) => {
     tradeIframe(data);
   }
 };
-const handleManualTrade = (data: { id: number; elecVolume: number }[]) => {
-  manualScrollIframe(data);
-};
 const handleCancel = () => {
   cancelTradeIframe();
 };
@@ -166,18 +161,7 @@ onMounted(() => {
 });
 </script>
 <style scoped lang="scss">
-.h-60 {
-  height: 480px;
-}
-</style>
-<style>
-.current-choice {
-  background-color: #5d9eff;
-}
-.next-choice {
-  background-color: #ffc4c4;
-}
-.prev-choice {
-  background-color: #75ff5d;
+.h-70 {
+  height: 560px;
 }
 </style>

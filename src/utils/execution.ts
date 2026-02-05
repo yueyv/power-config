@@ -1,52 +1,23 @@
 import { EXECUTION_TYPE } from '@/constants';
-import { mainLogError, mainLogInfo, mainLogWarn } from '@/model/log';
 import { executeCaptchaClickFlow } from './slideValid';
-import { logger } from './logger';
-let iframe: Window | undefined = undefined;
-let iframeDocument: Document | undefined = undefined;
-let prevChoice: { id: number; elecVolume: number }[] = [];
-let nextChoice: { id: number; elecVolume: number }[] = [];
-let currentChoice: { id: number; elecVolume: number } = { id: 0, elecVolume: 0 };
-let isTrade = false;
-function init() {
-  // @ts-ignore
-  iframe = document.getElementsByClassName('body-iframe tabsr')?.[0].contentWindow;
-  iframeDocument = iframe?.document;
 
-  // 检查样式是否已经注入
-  const existingStyle = iframeDocument?.getElementById('trade-choice-styles');
-  if (existingStyle) {
-    return; // 样式已存在，无需重复注入
-  }
-
-  // 创建样式元素
-  const style = iframeDocument!.createElement('style');
-  style.id = 'trade-choice-styles';
-  style.textContent = `
-    .current-choice {
-      background-color:rgb(166, 202, 255) !important;
-    }
-    .next-choice {
-      background-color: #ffc4c4 !important;
-    }
-    .prev-choice {
-      background-color:rgb(180, 249, 168) !important;
-    }
-  `;
-  // 将样式注入到 iframe 的 head 中
-  const head = iframeDocument?.head || iframeDocument?.getElementsByTagName('head')[0];
-  if (head) {
-    head.appendChild(style);
-    mainLogInfo('样式注入成功');
-  } else {
-    mainLogError('无法找到iframe的head元素');
+/**
+ * execution 运行在注入的 window 上下文，不能调用插件 API（如 chrome.storage）。
+ * 仅使用 console 与 postMessage，由 content script 接收后再落存储。
+ */
+function execLog(level: 'info' | 'warn' | 'error' | 'debug', message: string, data?: any): void {
+  const payload = { level, message, data };
+  if (level === 'error') console.error('[execution]', message, data);
+  else if (level === 'warn') console.warn('[execution]', message, data);
+  else if (level === 'debug') console.debug('[execution]', message, data);
+  else console.log('[execution]', message, data);
+  try {
+    window.postMessage({ type: EXECUTION_TYPE.LOG_INFO, message: JSON.stringify(payload) }, '*');
+  } catch {
+    // postMessage 失败时不再上报，避免影响主流程
   }
 }
 
-/**
- * 将日期时间字符串解析为时间戳（毫秒）。
- * 支持 2026-02-02 12:34:56、2026/02/02 12:34:56 等。
- */
 function parseDateTimeToMs(input: string): number | null {
   const raw = input?.trim();
   if (!raw) return null;
@@ -55,10 +26,6 @@ function parseDateTimeToMs(input: string): number | null {
   return Number.isNaN(ms) ? null : ms;
 }
 
-/**
- * 在 DOM 解析阶段计算并写入「到期/可摘牌」时间戳（毫秒）。
- * 优先：操作列 N 秒 → 当前时间 + N*1000；否则解析 xtdqsj 为绝对时间。
- */
 function computeAvailableAtMs(
   actionCountdownSeconds: number | undefined,
   xtdqsj: string
@@ -70,26 +37,19 @@ function computeAvailableAtMs(
   return ms ?? undefined;
 }
 
-/**
- * 从操作列文本解析「N秒后可摘牌」的秒数。
- * 支持纯数字 "30"、中文 "30秒后可摘牌"、"30秒" 等。
- */
 function parseActionCountdownSeconds(text: string): number | undefined {
   const raw = text.trim();
   if (!raw) return undefined;
-  // 纯数字：即秒数
   const onlyNum = raw.match(/^\d+$/);
   if (onlyNum) {
     const n = parseInt(onlyNum[0], 10);
     return Number.isFinite(n) ? n : undefined;
   }
-  // 「N秒后可摘牌」「N秒」等
   const secMatch = raw.match(/(\d+)\s*秒/);
   if (secMatch) {
     const n = parseInt(secMatch[1], 10);
     return Number.isFinite(n) ? n : undefined;
   }
-  // 分钟+秒
   const minMatch = raw.match(/(\d+)\s*分/);
   const secAfterMin = raw.match(/(\d+)\s*秒/);
   if (minMatch || secAfterMin) {
@@ -100,239 +60,81 @@ function parseActionCountdownSeconds(text: string): number | undefined {
   return undefined;
 }
 
-export function getMCGPTableData(): BUY_DATA_ITEM[] | null {
-  const table = iframeDocument?.getElementById('mcgpxx');
-  if (!table) {
-    return null;
-  }
-
-  // 获取表头列名
-  const thead = table.querySelector('thead');
-  const headerRow = thead?.querySelector('tr');
-  const headers: string[] = [];
-  if (headerRow) {
-    const thElements = headerRow.querySelectorAll('th');
-    thElements.forEach((th) => {
-      const div = th.querySelector('.dataTables_sizing');
-      if (div) {
-        headers.push(div.textContent?.trim() || '');
-      }
-    });
-  }
-  const findIndexByHeader = (aliases: string[]) => {
-    if (!headers.length) return -1;
-    for (const alias of aliases) {
-      const idx = headers.findIndex((h) => h && h.includes(alias));
-      if (idx >= 0) return idx;
-    }
-    return -1;
-  };
-
-  // 获取tbody中的所有行
-  const tbody = table.querySelector('tbody');
-  if (!tbody) {
-    return [];
-  }
-
-  const rows: BUY_DATA_ITEM[] | null = [];
-  const trElements = tbody.querySelectorAll('tr');
-
-  trElements.forEach((tr) => {
-    const tds = tr.querySelectorAll('td');
-    if (tds.length < 9) {
-      return; // 跳过不完整的行
-    }
-
-    const getCellText = (aliases: string[], fallbackIndex: number) => {
-      const idx = findIndexByHeader(aliases);
-      const cell = idx >= 0 ? tds[idx] : tds[fallbackIndex];
-      return cell?.textContent?.trim() || '';
-    };
-
-    // 提取数据
-    const gpdl = parseFloat(getCellText(['挂牌电量'], 0) || '0');
-    const sydl = parseFloat(getCellText(['剩余电量'], 1) || '0');
-    const gpdj = parseFloat(getCellText(['挂牌价格'], 2) || '0');
-    const dprice = parseFloat(getCellText(['D1曲线', 'D1'], 3) || '0');
-    const xhprice = parseFloat(getCellText(['该曲线', '现货价值', '现货'], 4) || '0');
-    const bfcj = getCellText(['部分成交'], 5) || '';
-    const hybdsj = getCellText(['合约标的时间', '合同标的时间', '合约标的'], 6) || '';
-    const zpsysj = getCellText(['摘牌系统时间', '系统时间'], 6) || '';
-    const xtdqsj = getCellText(['系统订单时间', '到期时间', '订单到期时间', '倒计时'], 6) || '';
-
-    // 从操作列提取：按钮 ID + 「N秒后可摘牌」的倒计时秒数
-    const actionIndex =
-      findIndexByHeader(['操作', '摘牌', '操作ID']) >= 0
-        ? findIndexByHeader(['操作', '摘牌', '操作ID'])
-        : Math.max(0, tds.length - 2);
-    const actionCell = tds[actionIndex];
-    const actionButton = actionCell?.querySelector('button');
-    const actionOnclick = actionButton?.getAttribute('onclick') || '';
-    const actionIDMatch = actionOnclick.match(/wyzp\((\d+)\)/);
-    const actionID = actionIDMatch ? parseInt(actionIDMatch[1], 10) : 0;
-    // 操作列可能是「30」或「30秒后可摘牌」等，解析为剩余秒数
-    const actionText = (actionCell?.textContent ?? actionButton?.textContent ?? '').trim();
-    const actionCountdownSeconds = parseActionCountdownSeconds(actionText);
-    const availableAtMs = computeAvailableAtMs(actionCountdownSeconds, xtdqsj);
-
-    // 从详情按钮中提取ID
-    const detailIndex =
-      findIndexByHeader(['详情', '详情ID']) >= 0
-        ? findIndexByHeader(['详情', '详情ID'])
-        : Math.max(0, tds.length - 1);
-    const detailButton = tds[detailIndex]?.querySelector('button');
-    const detailOnclick = detailButton?.getAttribute('onclick') || '';
-    const detailIDMatch = detailOnclick.match(/info\((\d+)/);
-    const detailID = detailIDMatch ? parseInt(detailIDMatch[1], 10) : 0;
-
-    rows.push({
-      gpid: actionID || detailID,
-      gpdl,
-      sydl,
-      gpdj,
-      dprice,
-      xhprice,
-      bfcj: bfcj === '是' ? '是' : '否',
-      hybdsj,
-      zpsysj,
-      xtdqsj,
-      ...(actionCountdownSeconds !== undefined && { actionCountdownSeconds }),
-      ...(availableAtMs !== undefined && { availableAtMs }),
-    });
-  });
-
-  return rows;
-}
-
-/**
- * 模拟真实的输入操作
- * 注意：由于浏览器安全策略，isTrusted 属性始终为 false，无法绕过
- * @param input 输入框元素
- * @param value 要输入的值
- * @returns 是否成功输入
- */
 function simulateInput(input: HTMLInputElement | null, value: string | number): boolean {
   if (!input) {
-    mainLogError('模拟输入失败：输入框元素不存在');
+    execLog('error', '模拟输入失败：输入框元素不存在');
     return false;
   }
-
   try {
-    // 确保输入框可见和可交互
     if (input.offsetParent === null) {
-      mainLogWarn('输入框不可见，尝试滚动到元素位置');
+      execLog('warn', '输入框不可见，尝试滚动到元素位置');
       input.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      // 等待滚动完成
       return false;
     }
-
-    // 聚焦输入框
     input.focus();
-
-    // 触发 focus 事件
-    input.dispatchEvent(
-      new FocusEvent('focus', {
-        bubbles: true,
-        cancelable: true,
-        view: window,
-      })
-    );
-
-    // 清空现有值
+    input.dispatchEvent(new FocusEvent('focus', { bubbles: true, cancelable: true, view: window }));
     input.value = '';
-
-    // 设置新值
     const stringValue = String(value);
     input.value = stringValue;
-
-    // 触发完整的输入事件序列
     const events = [
-      // input 事件（现代浏览器主要使用这个）
       new InputEvent('input', {
         bubbles: true,
         cancelable: true,
         inputType: 'insertText',
         data: stringValue,
       }),
-      // change 事件（值改变时触发）
-      new Event('change', {
-        bubbles: true,
-        cancelable: true,
-      }),
+      new Event('change', { bubbles: true, cancelable: true }),
     ];
-
-    // 依次触发事件
     events.forEach((event) => {
-      const defaultPrevented = !input.dispatchEvent(event);
-      if (defaultPrevented) {
-        mainLogWarn(`输入事件 ${event.type} 被阻止`);
-      }
+      if (!input.dispatchEvent(event)) execLog('warn', `输入事件 ${event.type} 被阻止`);
     });
-
-    // 如果输入框有 onchange 或 oninput 属性，尝试直接设置并触发
     const onchangeAttr = input.getAttribute('onchange');
-    if (onchangeAttr && iframe) {
-      try {
-        // 在 iframe 的上下文中执行 onchange
-        if (typeof (iframe as any).eval === 'function') {
+    if (onchangeAttr) {
+      const iframeEl = document.getElementsByClassName('body-iframe tabsr')?.[0] as
+        | HTMLIFrameElement
+        | undefined;
+      const iframe = iframeEl?.contentWindow;
+      if (iframe && typeof (iframe as any).eval === 'function') {
+        try {
           (iframe as any).eval(onchangeAttr);
+        } catch (error) {
+          execLog('warn', '执行 onchange 属性失败', error);
         }
-      } catch (error) {
-        mainLogWarn('执行 onchange 属性失败', error);
       }
     }
-
-    mainLogInfo(`模拟输入成功：${stringValue}`, {
+    execLog('info', `模拟输入成功：${stringValue}`, {
       inputId: input.id,
       inputName: input.name,
       inputType: input.type,
       value: input.value,
     });
-
     return true;
   } catch (error) {
-    mainLogError('模拟输入异常', error);
+    execLog('error', '模拟输入异常', error);
     return false;
   }
 }
 
-/**
- * 模拟真实的鼠标点击事件
- * 注意：由于浏览器安全策略，isTrusted 属性始终为 false，无法绕过
- * @param element 要点击的元素
- * @returns 是否成功触发点击
- */
 function simulateClick(element: HTMLElement | null): boolean {
   if (!element) {
-    mainLogError('模拟点击失败：元素不存在');
+    execLog('error', '模拟点击失败：元素不存在');
     return false;
   }
-
   try {
-    // 确保元素可见和可交互
     if (element.offsetParent === null) {
-      mainLogWarn('元素不可见，尝试滚动到元素位置');
+      execLog('warn', '元素不可见，尝试滚动到元素位置');
       element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      // 等待滚动完成
       return false;
     }
-
-    // 聚焦元素（如果可聚焦）
-    if (typeof (element as any).focus === 'function') {
-      (element as any).focus();
-    }
-
-    // 创建完整的鼠标事件序列，模拟真实用户交互
+    if (typeof (element as any).focus === 'function') (element as any).focus();
     const events = [
-      // mousedown 事件
       new MouseEvent('mousedown', {
         bubbles: true,
         cancelable: true,
         view: window,
-        button: 0, // 左键
+        button: 0,
         buttons: 1,
       }),
-      // mouseup 事件
       new MouseEvent('mouseup', {
         bubbles: true,
         cancelable: true,
@@ -340,7 +142,6 @@ function simulateClick(element: HTMLElement | null): boolean {
         button: 0,
         buttons: 0,
       }),
-      // click 事件
       new MouseEvent('click', {
         bubbles: true,
         cancelable: true,
@@ -349,249 +150,325 @@ function simulateClick(element: HTMLElement | null): boolean {
         buttons: 0,
       }),
     ];
-
-    // 依次触发事件
     events.forEach((event) => {
-      const defaultPrevented = !element.dispatchEvent(event);
-      if (defaultPrevented) {
-        mainLogWarn(`事件 ${event.type} 被阻止`);
-      }
+      if (!element.dispatchEvent(event)) execLog('warn', `事件 ${event.type} 被阻止`);
     });
-
-    // 如果元素有 onclick 属性，尝试直接执行函数调用
     const onclickAttr = element.getAttribute('onclick');
-    if (onclickAttr && iframe) {
+    if (onclickAttr) {
       try {
-        // 提取函数名和参数（例如：wyzp(123)）
         const onclickMatch = onclickAttr.match(/^(\w+)\(([^)]*)\)/);
         if (onclickMatch) {
           const funcName = onclickMatch[1];
           const argsStr = onclickMatch[2];
-
-          // 解析参数（支持数字和字符串）
           const args = argsStr
             ? argsStr.split(',').map((arg) => {
                 const trimmed = arg.trim();
-                // 尝试解析为数字
                 const num = Number(trimmed);
                 return isNaN(num) ? trimmed : num;
               })
             : [];
-
-          // 在 iframe 的 window 对象上查找并调用函数
-          if (typeof (iframe as any)[funcName] === 'function') {
+          const iframeEl = document.getElementsByClassName('body-iframe tabsr')?.[0] as
+            | HTMLIFrameElement
+            | undefined;
+          const iframe = iframeEl?.contentWindow;
+          if (iframe && typeof (iframe as any)[funcName] === 'function') {
             (iframe as any)[funcName](...args);
-            mainLogInfo(`直接调用函数：${funcName}(${args.join(', ')})`);
+            execLog('info', `直接调用函数：${funcName}(${args.join(', ')})`);
           } else {
-            mainLogWarn(`函数 ${funcName} 在 iframe 中不存在`);
+            execLog('warn', `函数 ${funcName} 在 iframe 中不存在`);
           }
         }
       } catch (error) {
-        mainLogError('执行 onclick 属性失败', error);
+        execLog('error', '执行 onclick 属性失败', error);
       }
     }
-
-    // 最后尝试直接调用 click 方法（作为后备方案）
-    if (typeof element.click === 'function') {
-      element.click();
-    }
-
-    mainLogInfo(`模拟点击成功：${element.tagName}`, {
+    if (typeof element.click === 'function') element.click();
+    execLog('info', `模拟点击成功：${element.tagName}`, {
       onclick: onclickAttr,
       text: element.textContent?.trim(),
     });
-
     return true;
   } catch (error) {
-    mainLogError('模拟点击异常', error);
+    execLog('error', '模拟点击异常', error);
     return false;
   }
 }
 
-async function updateChoice(currentChoiceElement: HTMLTableRowElement | null) {
-  // 等待一段时间，确保页面状态稳定
-  await new Promise((resolve) => setTimeout(resolve, 2000));
-  if (!isTrade) {
-    return;
-  }
-  const button = currentChoiceElement?.querySelector('button');
-  // 使用改进的模拟点击函数
-  const clickSuccess = simulateClick(button as HTMLElement);
-  await new Promise((resolve) => setTimeout(resolve, 300));
-  const input = iframeDocument?.getElementById('zpdl') as HTMLInputElement;
+/**
+ * 交易执行：管理 iframe 内表格状态与自动交易。
+ */
+export class TradeExecution {
+  private iframe: Window | undefined = undefined;
+  private iframeDocument: Document | undefined = undefined;
+  private prevChoice: { id: number; elecVolume: number }[] = [];
+  private nextChoice: { id: number; elecVolume: number }[] = [];
+  private currentChoice: { id: number; elecVolume: number } = { id: 0, elecVolume: 0 };
+  private isTrade = false;
 
-  // 先输入电量值
-  if (input && currentChoice.elecVolume > 0) {
-    const inputSuccess = simulateInput(input, currentChoice.elecVolume);
-    if (inputSuccess) {
-      mainLogInfo(`输入电量：${currentChoice.elecVolume}`, {
-        gpid: currentChoice.id,
-        elecVolume: currentChoice.elecVolume,
+  init(): void {
+    const iframeEl = document.getElementsByClassName('body-iframe tabsr')?.[0] as
+      | HTMLIFrameElement
+      | undefined;
+    this.iframe = iframeEl?.contentWindow ?? undefined;
+    this.iframeDocument = this.iframe?.document;
+  }
+
+  get isReady(): boolean {
+    return !!this.iframeDocument;
+  }
+
+  getMCGPTableData(): BUY_DATA_ITEM[] | null {
+    const table = this.iframeDocument?.getElementById('mcgpxx');
+    if (!table) return null;
+
+    const thead = table.querySelector('thead');
+    const headerRow = thead?.querySelector('tr');
+    const headers: string[] = [];
+    if (headerRow) {
+      headerRow.querySelectorAll('th').forEach((th) => {
+        const div = th.querySelector('.dataTables_sizing');
+        if (div) headers.push(div.textContent?.trim() || '');
       });
-      // 等待输入完成
-      await new Promise((resolve) => setTimeout(resolve, 500));
-    } else {
-      mainLogWarn('输入电量失败，但继续执行后续流程');
     }
-  } else {
-    mainLogWarn('未找到输入框或电量值为0', {
-      inputExists: !!input,
-      elecVolume: currentChoice.elecVolume,
+
+    const findIndexByHeader = (aliases: string[]) => {
+      if (!headers.length) return -1;
+      for (const alias of aliases) {
+        const idx = headers.findIndex((h) => h && h.includes(alias));
+        if (idx >= 0) return idx;
+      }
+      return -1;
+    };
+
+    const tbody = table.querySelector('tbody');
+    if (!tbody) return [];
+
+    const rows: BUY_DATA_ITEM[] = [];
+    const trElements = tbody.querySelectorAll('tr');
+
+    trElements.forEach((tr) => {
+      const tds = tr.querySelectorAll('td');
+      if (tds.length < 9) return;
+
+      const getCellText = (aliases: string[], fallbackIndex: number) => {
+        const idx = findIndexByHeader(aliases);
+        const cell = idx >= 0 ? tds[idx] : tds[fallbackIndex];
+        return cell?.textContent?.trim() || '';
+      };
+
+      const gpdl = parseFloat(getCellText(['挂牌电量'], 0) || '0');
+      const sydl = parseFloat(getCellText(['剩余电量'], 1) || '0');
+      const gpdj = parseFloat(getCellText(['挂牌价格'], 2) || '0');
+      const dprice = parseFloat(getCellText(['D1曲线', 'D1'], 3) || '0');
+      const xhprice = parseFloat(getCellText(['该曲线', '现货价值', '现货'], 4) || '0');
+      const bfcj = getCellText(['部分成交'], 5) || '';
+      const hybdsj = getCellText(['合约标的时间', '合同标的时间', '合约标的'], 6) || '';
+      const zpsysj = getCellText(['摘牌系统时间', '系统时间'], 6) || '';
+      const xtdqsj = getCellText(['系统订单时间', '到期时间', '订单到期时间', '倒计时'], 6) || '';
+
+      const actionIndex =
+        findIndexByHeader(['操作', '摘牌', '操作ID']) >= 0
+          ? findIndexByHeader(['操作', '摘牌', '操作ID'])
+          : Math.max(0, tds.length - 2);
+      const actionCell = tds[actionIndex];
+      const actionButton = actionCell?.querySelector('button');
+      const actionOnclick = actionButton?.getAttribute('onclick') || '';
+      const actionIDMatch = actionOnclick.match(/wyzp\((\d+)\)/);
+      const actionID = actionIDMatch ? parseInt(actionIDMatch[1], 10) : 0;
+      const actionText = (actionCell?.textContent ?? actionButton?.textContent ?? '').trim();
+      const actionCountdownSeconds = parseActionCountdownSeconds(actionText);
+      const availableAtMs = computeAvailableAtMs(actionCountdownSeconds, xtdqsj);
+
+      const detailIndex =
+        findIndexByHeader(['详情', '详情ID']) >= 0
+          ? findIndexByHeader(['详情', '详情ID'])
+          : Math.max(0, tds.length - 1);
+      const detailButton = tds[detailIndex]?.querySelector('button');
+      const detailOnclick = detailButton?.getAttribute('onclick') || '';
+      const detailIDMatch = detailOnclick.match(/info\((\d+)/);
+      const detailID = detailIDMatch ? parseInt(detailIDMatch[1], 10) : 0;
+
+      rows.push({
+        gpid: actionID || detailID,
+        gpdl,
+        sydl,
+        gpdj,
+        dprice,
+        xhprice,
+        bfcj: bfcj === '是' ? '是' : '否',
+        hybdsj,
+        zpsysj,
+        xtdqsj,
+        ...(actionCountdownSeconds !== undefined && { actionCountdownSeconds }),
+        ...(availableAtMs !== undefined && { availableAtMs }),
+      });
     });
+
+    return rows;
   }
 
-  if (!clickSuccess) {
-    mainLogWarn('点击操作按钮失败，但继续执行后续流程');
+  cancelTrade(): void {
+    this.isTrade = false;
   }
 
-  const ZPButtion = iframeDocument?.getElementById('qdzp') as HTMLButtonElement;
-  const ZPClickSuccess = simulateClick(ZPButtion as HTMLElement);
-  if (!ZPClickSuccess) {
-    mainLogWarn('点击摘牌按钮失败，但继续执行后续流程');
+  setChoiceAndTrade(choiceSellData: CHOICE_SELL_DATA): void {
+    this.isTrade = true;
+    this.currentChoice = choiceSellData.currentChoice ?? { id: 0, elecVolume: 0 };
+    this.prevChoice = choiceSellData.prevChoice ?? [];
+    this.nextChoice = choiceSellData.nextChoice ?? [];
   }
 
-  logger.debug('当前选择状态', {
-    currentChoice,
-    prevChoice,
-    nextChoice,
-    isTrade,
-  });
-  await executeCaptchaClickFlow();
+  private async updateChoice(currentChoiceElement: HTMLTableRowElement | null): Promise<void> {
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+    if (!this.isTrade) return;
 
-  // 处理nextChoice
+    let clickSuccess = false;
+    if (this.iframe && typeof (this.iframe as any).wyzp === 'function') {
+      try {
+        (this.iframe as any).wyzp(this.currentChoice.id);
+        clickSuccess = true;
+        execLog('info', `买操作：iframe.wyzp(${this.currentChoice.id})`);
+      } catch (error) {
+        execLog('error', '执行 iframe.wyzp(id) 失败', error);
+      }
+    } else {
+      execLog('warn', 'iframe 或 iframe.wyzp 不可用');
+    }
 
-  currentChoiceElement?.classList.remove('current-choice');
-  currentChoiceElement?.classList.add('prev-choice');
-  if (nextChoice.length <= 0) {
-    window.postMessage(
-      {
-        type: EXECUTION_TYPE.TRADE_END,
-        message: JSON.stringify(currentChoice),
-      },
-      '*'
-    );
-    mainLogInfo('交易结束');
-    return;
-  }
-  window.postMessage(
-    {
-      type: EXECUTION_TYPE.NEXT_CHOICE,
-      message: JSON.stringify(currentChoice),
-    },
-    '*'
-  );
-}
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    const input = this.iframeDocument?.getElementById('zpdl') as HTMLInputElement;
+    await new Promise((resolve) => setTimeout(resolve, 1200));
 
-async function renderChoiceState(options?: { autoTrade?: boolean }) {
-  const autoTrade = options?.autoTrade ?? true;
-  const table = iframeDocument?.getElementById('mcgpxx');
-  if (!table) {
-    return;
-  }
-  const tbody = table.querySelector('tbody');
-  if (!tbody) {
-    return;
-  }
+    if (input && this.currentChoice.elecVolume > 0) {
+      const inputSuccess = simulateInput(input, this.currentChoice.elecVolume);
+      if (inputSuccess) {
+        execLog('info', `输入电量：${this.currentChoice.elecVolume}`, {
+          gpid: this.currentChoice.id,
+          elecVolume: this.currentChoice.elecVolume,
+        });
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      } else {
+        execLog('warn', '输入电量失败，但继续执行后续流程');
+      }
+    } else {
+      execLog('warn', '未找到输入框或电量值为0', {
+        inputExists: !!input,
+        elecVolume: this.currentChoice.elecVolume,
+      });
+    }
 
-  const trs = tbody.querySelectorAll('tr');
-  let currentChoiceElement: HTMLTableRowElement | null = null;
+    if (!clickSuccess) execLog('warn', '点击操作按钮失败，但继续执行后续流程');
 
-  trs.forEach((tr) => {
-    const tds = tr.querySelectorAll('td');
-    if (tds.length < 9) {
+    const ZPButton = this.iframeDocument?.getElementById('qdzp') as HTMLButtonElement;
+    if (!simulateClick(ZPButton as HTMLElement)) {
+      execLog('warn', '点击摘牌按钮失败，但继续执行后续流程');
+    }
+
+    execLog('debug', '当前选择状态', {
+      currentChoice: this.currentChoice,
+      prevChoice: this.prevChoice,
+      nextChoice: this.nextChoice,
+      isTrade: this.isTrade,
+    });
+    await executeCaptchaClickFlow();
+
+    if (this.nextChoice.length <= 0) {
+      window.postMessage(
+        { type: EXECUTION_TYPE.TRADE_END, message: JSON.stringify(this.currentChoice) },
+        '*'
+      );
+      execLog('info', '交易结束');
       return;
     }
-    // 从操作按钮中提取ID
-    const actionButton = tds[7].querySelector('button');
-    const actionOnclick = actionButton?.getAttribute('onclick') || '';
-    const actionIDMatch = actionOnclick.match(/wyzp\((\d+)\)/);
-    const gpid = actionIDMatch ? parseInt(actionIDMatch[1], 10) : 0;
-    tr.classList.remove('current-choice', 'prev-choice', 'next-choice');
+    window.postMessage(
+      { type: EXECUTION_TYPE.NEXT_CHOICE, message: JSON.stringify(this.currentChoice) },
+      '*'
+    );
+  }
 
-    if (gpid === currentChoice.id) {
-      tr.classList.add('current-choice');
-      currentChoiceElement = tr;
-    } else if (prevChoice.some((item) => item.id === gpid)) {
-      tr.classList.add('prev-choice');
-    } else if (nextChoice.some((item) => item.id === gpid)) {
-      tr.classList.add('next-choice');
-    }
-  });
+  async renderChoiceState(options?: { autoTrade?: boolean }): Promise<void> {
+    const autoTrade = options?.autoTrade ?? true;
+    const table = this.iframeDocument?.getElementById('mcgpxx');
+    const tbody = table?.querySelector('tbody');
+    if (!tbody) return;
 
-  // 滚动到 current-choice 元素
-  if (currentChoiceElement) {
-    (currentChoiceElement as HTMLTableRowElement).scrollIntoView({
-      behavior: 'smooth',
-      block: 'center',
-    });
-    // 自动模式下才执行完整自动交易流程；手动模式仅高亮和滚动
-    if (autoTrade) {
-      updateChoice(currentChoiceElement);
+    const trs = tbody.querySelectorAll('tr');
+    let currentChoiceElement: HTMLTableRowElement | null = null;
+
+    for (let i = 0; i < trs.length; i++) {
+      const tr = trs[i];
+      const tds = tr.querySelectorAll('td');
+      if (tds.length < 9) continue;
+      const actionButton = tds[7].querySelector('button');
+      const actionOnclick = actionButton?.getAttribute('onclick') || '';
+      const actionIDMatch = actionOnclick.match(/wyzp\((\d+)\)/);
+      const gpid = actionIDMatch ? parseInt(actionIDMatch[1], 10) : 0;
+      if (gpid === this.currentChoice.id) {
+        currentChoiceElement = tr as HTMLTableRowElement;
+      }
     }
+
+    if (currentChoiceElement) {
+      currentChoiceElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      if (autoTrade) {
+        await this.updateChoice(currentChoiceElement);
+      }
+    }
+  }
+
+  async tradeIframe(): Promise<void> {
+    await this.renderChoiceState({ autoTrade: true });
   }
 }
 
-export async function tradeIframe() {
-  await renderChoiceState({ autoTrade: true });
+const tradeExecution = new TradeExecution();
+
+export function getMCGPTableData(): BUY_DATA_ITEM[] | null {
+  return tradeExecution.getMCGPTableData();
+}
+
+export async function tradeIframe(): Promise<void> {
+  await tradeExecution.tradeIframe();
 }
 
 window.addEventListener('message', (event) => {
   switch (event.data.type) {
     case EXECUTION_TYPE.INITIFRAME:
-      init();
-      if (!!iframeDocument) {
-        mainLogInfo('初始化iframe成功');
+      tradeExecution.init();
+      if (tradeExecution.isReady) {
+        execLog('info', '初始化iframe成功');
       } else {
-        mainLogError('初始化iframe失败');
+        execLog('error', '初始化iframe失败');
       }
-      const buyData = getMCGPTableData();
+      const buyData = tradeExecution.getMCGPTableData();
       if (buyData) {
-        mainLogInfo('获取挂牌数据成功', buyData);
+        execLog('info', '获取挂牌数据成功', buyData);
       } else {
-        mainLogError('获取挂牌数据失败');
+        execLog('error', '获取挂牌数据失败');
       }
       window.postMessage(
-        {
-          type: EXECUTION_TYPE.GET_SELL_DATA,
-          message: JSON.stringify({ data: buyData }),
-        },
+        { type: EXECUTION_TYPE.GET_SELL_DATA, message: JSON.stringify({ data: buyData }) },
         '*'
       );
       break;
-    case EXECUTION_TYPE.CANCEL_TRADE:
-      isTrade = false;
-      mainLogInfo('终止交易', event.data.message);
 
+    case EXECUTION_TYPE.CANCEL_TRADE:
+      tradeExecution.cancelTrade();
+      execLog('info', '终止交易', event.data.message);
       break;
+
     case EXECUTION_TYPE.TRADE: {
-      isTrade = true;
-      mainLogInfo('交易', JSON.parse(event.data.message));
+      execLog('info', '交易', JSON.parse(event.data.message));
       const choiceSellData: CHOICE_SELL_DATA = JSON.parse(event.data.message);
-      currentChoice = choiceSellData.currentChoice;
-      prevChoice = choiceSellData.prevChoice;
-      nextChoice = choiceSellData.nextChoice;
-      void tradeIframe();
+      tradeExecution.setChoiceAndTrade(choiceSellData);
+      void tradeExecution.tradeIframe();
       break;
     }
-    case EXECUTION_TYPE.MANUAL_TRADE: {
-      // 手动交易视图：只高亮和滚动到对应交易序列，不触发自动点击和输入
-      isTrade = false;
-      mainLogInfo('手动交易视图', JSON.parse(event.data.message));
-      const manualChoiceSellData: CHOICE_SELL_DATA = JSON.parse(event.data.message);
-      currentChoice = manualChoiceSellData.currentChoice;
-      prevChoice = manualChoiceSellData.prevChoice;
-      nextChoice = manualChoiceSellData.nextChoice;
-      void renderChoiceState({ autoTrade: false });
-      break;
-    }
+
     case EXECUTION_TYPE.REQUEST_SELL_DATA: {
-      // 重新解析 iframe 表格并回传最新挂牌数据
-      const buyData = getMCGPTableData();
+      const buyData = tradeExecution.getMCGPTableData();
       window.postMessage(
-        {
-          type: EXECUTION_TYPE.GET_SELL_DATA,
-          message: JSON.stringify({ data: buyData }),
-        },
+        { type: EXECUTION_TYPE.GET_SELL_DATA, message: JSON.stringify({ data: buyData }) },
         '*'
       );
       break;

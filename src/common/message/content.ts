@@ -1,4 +1,4 @@
-import { EXECUTION_TYPE, TRADE_STATUS, XHR_PORT_NAME } from '@/constants';
+import { EXECUTION_TYPE, SLIDER_POSITION_API, TRADE_STATUS, XHR_PORT_NAME } from '@/constants';
 import { FETCH_PORT_NAME } from '@/constants';
 import { SCRIPT_LOGGER_PORT_NAME } from '@/constants';
 import { receiveLoggerMessage } from '../log';
@@ -127,6 +127,8 @@ export function useBackgroundConnection(options?: UseBackgroundConnectionOptions
         if (!parsed) break;
         const choiceSellData: CHOICE_SELL_DATA = await updateTradeData(parsed);
         logInfo('content', '完成选择', event.data.message);
+        // todo
+        return;
         const proceed = await ElMessageBox.confirm('确定 继续交易吗？', '提示', {
           confirmButtonText: '确定',
           cancelButtonText: '取消',
@@ -139,31 +141,8 @@ export function useBackgroundConnection(options?: UseBackgroundConnectionOptions
           logAction('content', '异常停止，终止交易');
           break;
         }
-        // 下一步交易：若下一笔有倒计时则先等待并提示
-        const nextChoice = choiceSellData.currentChoice;
-        if (nextChoice && showWaitCountdown) {
-          const getCurrentMs = () => {
-            const item = sellData.value.find((r) => r.gpid === nextChoice.id);
-            return item ? getTimeLeftMs(item) : null;
-          };
-          const ms = getCurrentMs();
-          if (ms !== null && ms > 0) {
-            const cancelled = await showWaitCountdown(getCurrentMs);
-            if (cancelled) {
-              tradeStatus.value = TRADE_STATUS.CANCEL_TRADE;
-              setSellDataStatus(tradeStatus.value);
-              logAction('content', '等待倒计时取消，终止交易');
-              break;
-            }
-          }
-        }
-        window.postMessage(
-          {
-            type: EXECUTION_TYPE.TRADE,
-            message: JSON.stringify(choiceSellData),
-          },
-          '*'
-        );
+        // 下一步交易：统一走倒计时检查后再发送
+        await sendTradeWithCountdownCheck(choiceSellData);
         break;
       }
       case EXECUTION_TYPE.TRADE_END:
@@ -175,6 +154,54 @@ export function useBackgroundConnection(options?: UseBackgroundConnectionOptions
         setSellDataStatus(tradeStatus.value);
         logInfo('content', '交易结束');
         break;
+      case EXECUTION_TYPE.SLIDER_POSITION_REQUEST: {
+        const parsed = safeJsonParse(raw) as {
+          requestId?: string;
+          targetBase64?: string;
+          backgroundBase64?: string;
+        } | null;
+        if (!parsed?.requestId || parsed.targetBase64 == null || parsed.backgroundBase64 == null)
+          break;
+        chrome.runtime.sendMessage(
+          {
+            type: SLIDER_POSITION_API,
+            data: {
+              target_base64: parsed.targetBase64,
+              background_base64: parsed.backgroundBase64,
+            },
+          },
+          (response: { success?: boolean; percentage?: number; error?: string } | undefined) => {
+            const err = chrome.runtime.lastError;
+            if (err) {
+              window.postMessage(
+                {
+                  type: EXECUTION_TYPE.SLIDER_POSITION_RESPONSE,
+                  message: JSON.stringify({
+                    requestId: parsed.requestId,
+                    success: false,
+                    error: err.message,
+                  }),
+                },
+                '*'
+              );
+              return;
+            }
+            window.postMessage(
+              {
+                type: EXECUTION_TYPE.SLIDER_POSITION_RESPONSE,
+                message: JSON.stringify({
+                  requestId: parsed.requestId,
+                  success: response?.success ?? false,
+                  percentage: response?.percentage,
+                  error: response?.error,
+                }),
+              },
+              '*'
+            );
+          }
+        );
+        break;
+      }
       default:
         break;
     }
@@ -212,21 +239,17 @@ export function useBackgroundConnection(options?: UseBackgroundConnectionOptions
           confirmButtonText: '确定',
           cancelButtonText: '取消',
         })
-          .then((result) => {
+          .then(async (result) => {
             logAction('content', '交易中，继续交易');
-            getChoiceSellData().then((data: CHOICE_SELL_DATA) => {
-              actualElectricityVolume.value += data.prevChoice.reduce(
-                (acc, curr) => acc + curr.elecVolume,
-                0
-              );
-              window.postMessage(
-                {
-                  type: EXECUTION_TYPE.TRADE,
-                  message: JSON.stringify(data),
-                },
-                '*'
-              );
-            });
+            const data: CHOICE_SELL_DATA = await getChoiceSellData();
+            actualElectricityVolume.value += data.prevChoice.reduce(
+              (acc, curr) => acc + curr.elecVolume,
+              0
+            );
+            tradeStatus.value = TRADE_STATUS.TRADE;
+            setSellDataStatus(tradeStatus.value);
+            // 恢复交易时也考虑当前笔的倒计时
+            await sendTradeWithCountdownCheck(data);
           })
           .catch(() => {
             logAction('content', '交易中，终止交易');
@@ -259,6 +282,37 @@ export function useBackgroundConnection(options?: UseBackgroundConnectionOptions
     return choiceSellData;
   }
 
+  /**
+   * 统一「带倒计时检查的发送交易」：若当前要交易的 currentChoice 有倒计时且 showWaitCountdown 可用，
+   * 先等待倒计时（或用户取消），再发送 TRADE。用于：继续交易、init 恢复交易、下一步交易。
+   */
+  async function sendTradeWithCountdownCheck(choiceSellData: CHOICE_SELL_DATA): Promise<void> {
+    const current = choiceSellData.currentChoice;
+    if (current && showWaitCountdown) {
+      const getCurrentMs = () => {
+        const item = sellData.value.find((r) => r.gpid === current.id);
+        return item ? getTimeLeftMs(item) : null;
+      };
+      const ms = getCurrentMs();
+      if (ms !== null && ms > 0) {
+        const cancelled = await showWaitCountdown(getCurrentMs);
+        if (cancelled) {
+          tradeStatus.value = TRADE_STATUS.CANCEL_TRADE;
+          setSellDataStatus(tradeStatus.value);
+          logAction('content', '等待倒计时取消，终止交易');
+          return;
+        }
+      }
+    }
+    window.postMessage(
+      {
+        type: EXECUTION_TYPE.TRADE,
+        message: JSON.stringify(choiceSellData),
+      },
+      '*'
+    );
+  }
+
   function tradeIframe(data: { id: number; elecVolume: number }[]) {
     tradeStatus.value = TRADE_STATUS.TRADE;
     setSellDataStatus(tradeStatus.value);
@@ -272,26 +326,6 @@ export function useBackgroundConnection(options?: UseBackgroundConnectionOptions
     window.postMessage(
       {
         type: EXECUTION_TYPE.TRADE,
-        message: JSON.stringify(choiceSellData),
-      },
-      '*'
-    );
-  }
-
-  /**
-   * 手动交易视图：只在页面中高亮 / 滚动到对应交易序列，不自动点击或输入。
-   */
-  function manualScrollIframe(data: { id: number; elecVolume: number }[]) {
-    const sorted = sortChoiceItemsByPriceAndCountdown(data, sellData.value);
-    if (!sorted.length) return;
-    const choiceSellData: CHOICE_SELL_DATA = {
-      prevChoice: [],
-      currentChoice: sorted[0],
-      nextChoice: sorted.slice(1),
-    };
-    window.postMessage(
-      {
-        type: EXECUTION_TYPE.MANUAL_TRADE,
         message: JSON.stringify(choiceSellData),
       },
       '*'
@@ -318,13 +352,8 @@ export function useBackgroundConnection(options?: UseBackgroundConnectionOptions
     tradeStatus.value = TRADE_STATUS.TRADE;
     setSellDataStatus(tradeStatus.value);
     const choiceSellData: CHOICE_SELL_DATA = await getChoiceSellData();
-    window.postMessage(
-      {
-        type: EXECUTION_TYPE.TRADE,
-        message: JSON.stringify(choiceSellData),
-      },
-      '*'
-    );
+    // 重新交易时也考虑当前笔的倒计时，等待可摘牌后再发送
+    await sendTradeWithCountdownCheck(choiceSellData);
   }
 
   /** 向 execution 请求同步最新挂牌数据（重新解析 iframe 表格并回传 GET_SELL_DATA） */
@@ -342,7 +371,6 @@ export function useBackgroundConnection(options?: UseBackgroundConnectionOptions
     resetTradeIframe,
     actualElectricityVolume,
     continueTradeIframe,
-    manualScrollIframe,
     requestSyncSellData,
   };
 }
