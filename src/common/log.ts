@@ -1,8 +1,9 @@
 import { LOGGER_LEVEL, LOGGER_TARGET, SCRIPT_LOGGER_PORT_NAME } from '@/constants';
 import { DOMAIN } from '@/constants';
 import { logAction, logResponse, logError, logDebug, logInfo, logWarn } from '@/model/log';
-// 发送日志消息给content
+// 发送日志消息给 content（仅在有 window 的环境，如 content/popup/页面；background 无 window 不发送）
 export function sendLoggerMessage(level: string, message: any, data?: any) {
+  if (typeof window === 'undefined') return;
   window.postMessage(
     {
       type: SCRIPT_LOGGER_PORT_NAME,

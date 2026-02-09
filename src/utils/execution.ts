@@ -374,6 +374,7 @@ export class TradeExecution {
     //   开发环境专属 keepFirstMaskOnly
     keepFirstMaskOnly(this.iframeDocument as Document);
     await executeCaptchaClickFlow();
+    await new Promise((resolve) => setTimeout(resolve, 1000));
 
     if (this.nextChoice.length <= 0) {
       window.postMessage(

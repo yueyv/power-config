@@ -153,12 +153,13 @@ export default function useBackgroundConnection() {
         }
       );
       clearTimeout(timeoutId);
-
+      console.log(response);
       if (!response.ok) {
         throw new Error(`API 请求失败: ${response.status} ${response.statusText}`);
       }
 
       const result = await response.json();
+      console.log(result);
       backgroundLogger.debug('Background API 返回数据:', result);
 
       const percentage = result.percentage ?? result.position ?? result ?? 0;

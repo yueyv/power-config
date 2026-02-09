@@ -36,8 +36,16 @@ function getCaptchaContainer(): Element | null {
   const iframe = iframeEl?.contentWindow ?? undefined;
   const iframeDocument = iframe?.document;
   const el = iframeDocument?.querySelector(CAPTCHA_CONTAINER_SELECTOR);
-  console.log('el', el);
-  return el as Element;
+  return el ?? null;
+}
+
+/** mask 是否隐藏（display:none） */
+function isMaskInVisible(): boolean {
+  const mask = getCaptchaContainer();
+  if (!mask) return false;
+  const display = mask.ownerDocument.defaultView?.getComputedStyle(mask).display;
+  console.log('display', display);
+  return display === 'none';
 }
 
 const VERIFY_SELECTORS = {
@@ -201,7 +209,7 @@ async function executeCaptchaClickFlow(): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, 500));
   execLog('info', '验证码流程就绪，开始识别并滑动');
   await new Promise((resolve) => setTimeout(resolve, 1500));
-  await getCaptchaImagesAndCallAPIWithRetry(3, 1000);
+  await getCaptchaImagesAndCallAPIWithRetry(3, 2000);
 }
 
 /**
@@ -476,14 +484,14 @@ async function slideToPosition(percentage: number): Promise<boolean> {
 /**
  * 获取验证码图片并调用 API
  */
-async function getCaptchaImagesAndCallAPI(): Promise<number | null> {
+async function getCaptchaImagesAndCallAPI(): Promise<void> {
   execLog('debug', '开始获取验证码图片...');
 
   // 查找滑块图片
   const sliderImage = findSliderImage();
   if (!sliderImage) {
     execLog('error', '未找到滑块图片');
-    return null;
+    return;
   }
 
   // 等待图片加载完成（如果是 img 元素）
@@ -500,7 +508,7 @@ async function getCaptchaImagesAndCallAPI(): Promise<number | null> {
   const backgroundImage = findBackgroundImage();
   if (!backgroundImage) {
     execLog('error', '未找到背景图片');
-    return null;
+    return;
   }
 
   // 等待图片加载完成（如果是 img 元素）
@@ -532,10 +540,10 @@ async function getCaptchaImagesAndCallAPI(): Promise<number | null> {
     // 滑动滑块到目标位置
     await slideToPosition(percentage);
 
-    return percentage;
+    return;
   } catch (error) {
     execLog('error', '处理验证码图片失败:', error);
-    return null;
+    return;
   }
 }
 
@@ -553,16 +561,14 @@ async function getCaptchaImagesAndCallAPIWithRetry(
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       execLog('info', `尝试获取验证码图片 (第 ${attempt}/${maxRetries} 次)...`);
-      const result = await getCaptchaImagesAndCallAPI();
-
-      if (result !== null) {
-        execLog('info', `成功获取验证码位置: ${result}%`);
-        return result;
-      } else {
-        // 如果返回 null，说明某些步骤失败了，继续重试
-        execLog('warn', `第 ${attempt} 次尝试返回 null，准备重试...`);
-        lastError = new Error('获取验证码图片返回 null');
+      await getCaptchaImagesAndCallAPI();
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      if (isMaskInVisible()) {
+        execLog('info', 'mask 已隐藏，视为验证通过');
+        return 0;
       }
+      execLog('warn', `第 ${attempt} 次尝试返回 null，准备重试...`);
+      lastError = new Error('获取验证码图片返回 null');
     } catch (error) {
       execLog('error', `第 ${attempt} 次尝试失败:`, error);
       lastError = error instanceof Error ? error : new Error(String(error));
