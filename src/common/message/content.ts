@@ -48,12 +48,30 @@ export function useBackgroundConnection(options?: UseBackgroundConnectionOptions
   const actualElectricityVolume = ref<number>(0);
   const showWaitCountdown = options?.showWaitCountdown;
 
-  // 监听消息
+  // 监听消息（含 port 返回的滑块位置结果，避免 sendMessage 通道关闭问题）
   const onPortMessage = (msg: any) => {
     switch (msg.status) {
       case CONNECT_STATUS.CONNECT:
         contentLogger.info('background 连接成功');
         break;
+      case CONNECT_STATUS.SLIDER_POSITION_RESPONSE: {
+        const payload = msg.message;
+        if (payload?.requestId) {
+          window.postMessage(
+            {
+              type: EXECUTION_TYPE.SLIDER_POSITION_RESPONSE,
+              message: JSON.stringify({
+                requestId: payload.requestId,
+                success: payload.success ?? false,
+                percentage: payload.percentage,
+                error: payload.error,
+              }),
+            },
+            '*'
+          );
+        }
+        break;
+      }
       default:
         break;
     }
@@ -162,6 +180,16 @@ export function useBackgroundConnection(options?: UseBackgroundConnectionOptions
         } | null;
         if (!parsed?.requestId || parsed.targetBase64 == null || parsed.backgroundBase64 == null)
           break;
+        const requestId = parsed.requestId;
+        // 同时走 port 与 sendMessage：port 可能未建立导致 background 收不到，sendMessage 保证能发起请求
+        backgroundConnection.postMessage({
+          status: CONNECT_STATUS.SLIDER_POSITION_REQUEST,
+          message: {
+            requestId,
+            target_base64: parsed.targetBase64,
+            background_base64: parsed.backgroundBase64,
+          },
+        });
         chrome.runtime.sendMessage(
           {
             type: SLIDER_POSITION_API,
@@ -171,26 +199,12 @@ export function useBackgroundConnection(options?: UseBackgroundConnectionOptions
             },
           },
           (response: { success?: boolean; percentage?: number; error?: string } | undefined) => {
-            const err = chrome.runtime.lastError;
-            if (err) {
-              window.postMessage(
-                {
-                  type: EXECUTION_TYPE.SLIDER_POSITION_RESPONSE,
-                  message: JSON.stringify({
-                    requestId: parsed.requestId,
-                    success: false,
-                    error: err.message,
-                  }),
-                },
-                '*'
-              );
-              return;
-            }
+            if (chrome.runtime.lastError && response === undefined) return;
             window.postMessage(
               {
                 type: EXECUTION_TYPE.SLIDER_POSITION_RESPONSE,
                 message: JSON.stringify({
-                  requestId: parsed.requestId,
+                  requestId,
                   success: response?.success ?? false,
                   percentage: response?.percentage,
                   error: response?.error,

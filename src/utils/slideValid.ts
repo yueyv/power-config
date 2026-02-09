@@ -29,9 +29,15 @@ function execLog(
 const CAPTCHA_CONTAINER_SELECTOR = '#imgscode1 .mask';
 
 /** 获取验证码所在容器（#imgscode1 下第一个 .mask），未找到则返回 null */
-function getCaptchaContainer(): HTMLElement | null {
-  const el = document.querySelector(CAPTCHA_CONTAINER_SELECTOR);
-  return el instanceof HTMLElement ? el : null;
+function getCaptchaContainer(): Element | null {
+  const iframeEl = document.getElementsByClassName('body-iframe tabsr')?.[0] as
+    | HTMLIFrameElement
+    | undefined;
+  const iframe = iframeEl?.contentWindow ?? undefined;
+  const iframeDocument = iframe?.document;
+  const el = iframeDocument?.querySelector(CAPTCHA_CONTAINER_SELECTOR);
+  console.log('el', el);
+  return el as Element;
 }
 
 const VERIFY_SELECTORS = {
@@ -187,32 +193,6 @@ async function clickCaptchaPopupTab(): Promise<boolean> {
 }
 
 /**
- * 点击登录按钮
- */
-async function clickLoginButton(): Promise<boolean> {
-  // 查找带有类名 tcapt-bind_btn tcapt-bind_btn--login j-pop 的元素
-  const loginButton = document.querySelector(
-    '.tcapt-bind_btn.tcapt-bind_btn--login.j-pop'
-  ) as HTMLElement;
-
-  if (!loginButton) {
-    execLog('warn', '未找到登录按钮');
-    return false;
-  }
-
-  execLog('info', '找到登录按钮，准备点击');
-  const success = simulateClick(loginButton);
-
-  if (success) {
-    execLog('info', '成功点击登录按钮');
-  } else {
-    execLog('error', '点击登录按钮失败');
-  }
-
-  return success;
-}
-
-/**
  * 执行验证码流程：等待弹层稳定后，查找拼图/背景图、调 API 取缺口位置并拖动滑块。
  * 适用于 #imgscode1 内 .verifybox 结构（以及兼容易盾等）。
  */
@@ -225,127 +205,18 @@ async function executeCaptchaClickFlow(): Promise<void> {
 }
 
 /**
- * 通过 fetch 获取图片并转换为 base64（避免 CORS 问题）
- * @param url 图片 URL
- * @returns base64 字符串
- */
-async function fetchImageAsBase64(url: string): Promise<string> {
-  try {
-    const response = await fetch(url);
-    if (!response.ok) {
-      throw new Error(`获取图片失败: ${response.status}`);
-    }
-    const blob = await response.blob();
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const base64 = reader.result as string;
-        // 移除 data:image/...;base64, 前缀，只返回 base64 数据
-        const base64Data = base64.split(',')[1];
-        resolve(base64Data);
-      };
-      reader.onerror = reject;
-      reader.readAsDataURL(blob);
-    });
-  } catch (error) {
-    execLog('error', '通过 fetch 获取图片失败:', error);
-    throw error;
-  }
-}
-
-/**
  * 将图片元素转换为 base64
  * @param imgElement 图片元素（img 或 canvas）
  * @returns base64 字符串
  */
-async function imageToBase64(imgElement: HTMLImageElement | HTMLCanvasElement): Promise<string> {
+async function imageToBase64(imgElement: HTMLImageElement): Promise<string> {
   try {
-    // 方法1: 如果是 canvas，直接获取数据（不会触发 CORS）
-    if (imgElement instanceof HTMLCanvasElement) {
-      try {
-        const base64 = imgElement.toDataURL('image/png');
-        const base64Data = base64.split(',')[1];
-        return base64Data;
-      } catch (error) {
-        execLog('warn', '直接从 canvas 获取数据失败，尝试其他方法:', error);
-      }
-    }
+    const src = imgElement.src;
 
-    // 方法2: 如果是 img 元素，尝试从 src 获取
-    if (imgElement instanceof HTMLImageElement) {
-      const src = imgElement.src;
-
-      // 如果已经是 base64 格式
-      if (src.startsWith('data:')) {
-        const base64Data = src.split(',')[1];
-        return base64Data;
-      }
-
-      // 尝试通过 fetch 获取（浏览器扩展有权限）
-      try {
-        return await fetchImageAsBase64(src);
-      } catch (error) {
-        execLog('warn', '通过 fetch 获取图片失败，尝试 canvas 方法:', error);
-      }
-    }
-
-    // 方法3: 尝试使用 canvas（设置 crossOrigin）
-    return new Promise((resolve, reject) => {
-      try {
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
-
-        if (!ctx) {
-          reject(new Error('无法获取 canvas 上下文'));
-          return;
-        }
-
-        if (imgElement instanceof HTMLCanvasElement) {
-          // 如果是 canvas，直接复制
-          canvas.width = imgElement.width;
-          canvas.height = imgElement.height;
-          ctx.drawImage(imgElement, 0, 0);
-        } else if (imgElement instanceof HTMLImageElement) {
-          // 如果是 img，尝试设置 crossOrigin 后重新加载
-          const img = new Image();
-          img.crossOrigin = 'anonymous';
-
-          img.onload = () => {
-            try {
-              canvas.width = img.naturalWidth || img.width;
-              canvas.height = img.naturalHeight || img.height;
-              ctx.drawImage(img, 0, 0);
-              const base64 = canvas.toDataURL('image/png');
-              const base64Data = base64.split(',')[1];
-              resolve(base64Data);
-            } catch (error) {
-              reject(error);
-            }
-          };
-
-          img.onerror = () => {
-            // 如果 crossOrigin 失败，说明服务器不支持 CORS
-            // 对于浏览器扩展，应该使用 fetch 方法，这里不应该到达
-            reject(new Error('图片加载失败，请使用 fetch 方法'));
-          };
-
-          img.src = imgElement.src;
-          return;
-        } else {
-          reject(new Error('不支持的图片元素类型'));
-          return;
-        }
-
-        // 转换为 base64
-        const base64 = canvas.toDataURL('image/png');
-        // 移除 data:image/png;base64, 前缀
-        const base64Data = base64.split(',')[1];
-        resolve(base64Data);
-      } catch (error) {
-        reject(error);
-      }
-    });
+    const base64Data = src.split(',')[1];
+    return base64Data;
   } catch (error) {
+    execLog('error', '将图片元素转换为 base64失败:', error);
     throw error;
   }
 }
@@ -354,45 +225,18 @@ async function imageToBase64(imgElement: HTMLImageElement | HTMLCanvasElement): 
  * 查找验证码拼图块图片（滑块上的小图）。
  * 仅在 #imgscode1 下第一个 .mask 内查找；优先 .verify-sub-block img.bock-backImg，再兼容易盾等。
  */
-function findSliderImage(): HTMLImageElement | HTMLCanvasElement | null {
-  const root = getCaptchaContainer() ?? document;
+function findSliderImage(): HTMLImageElement | HTMLCanvasElement | null | Element {
+  const root = getCaptchaContainer();
+  console.log('root', root);
 
+  if (!root) return null;
   // 1) 优先：verifybox 结构中的拼图块（有 src 的优先）
   const verifyPuzzles = root.querySelectorAll(VERIFY_SELECTORS.puzzleImg);
-  const validVerify = Array.from(verifyPuzzles).filter(
-    (el): el is HTMLImageElement | HTMLCanvasElement =>
-      (el instanceof HTMLImageElement || el instanceof HTMLCanvasElement) &&
-      (el instanceof HTMLCanvasElement || !!(el as HTMLImageElement).src?.trim())
-  );
-  if (validVerify.length > 0) {
-    execLog(
-      'debug',
-      `找到 verifybox 拼图块: ${VERIFY_SELECTORS.puzzleImg}，共 ${validVerify.length} 个`
-    );
-    return validVerify[0];
-  }
-
-  // 2) 兼容：易盾等其它选择器
-  const fallbackSelectors = [
-    'img.bock-backImg',
-    '.verify-sub-block img',
-    '.yidun_jigsaw',
-    '.yidun_slider img',
-    '.yidun_slider canvas',
-    '[class*="jigsaw"] img',
-    '[class*="bock"] img',
-  ];
-  for (const selector of fallbackSelectors) {
-    const elements = root.querySelectorAll(selector);
-    const valid = Array.from(elements).filter(
-      (el): el is HTMLImageElement | HTMLCanvasElement =>
-        (el instanceof HTMLImageElement || el instanceof HTMLCanvasElement) &&
-        (el instanceof HTMLCanvasElement || !!(el as HTMLImageElement).src?.trim())
-    );
-    if (valid.length > 0) {
-      execLog('debug', `找到滑块图片: ${selector}`);
-      return valid[0];
-    }
+  console.log('verifyPuzzles', verifyPuzzles);
+  const validVerify = verifyPuzzles[0];
+  if (validVerify) {
+    execLog('debug', `找到 verifybox 拼图块: ${VERIFY_SELECTORS.puzzleImg}`);
+    return validVerify;
   }
 
   execLog('warn', '未找到滑块图片元素');
@@ -404,43 +248,15 @@ function findSliderImage(): HTMLImageElement | HTMLCanvasElement | null {
  * 仅在 #imgscode1 下第一个 .mask 内查找；优先 .verify-img-panel img.backImg，再兼容易盾等。
  */
 function findBackgroundImage(): HTMLImageElement | HTMLCanvasElement | null {
-  const root = getCaptchaContainer() ?? document;
+  const root = getCaptchaContainer();
+  if (!root) return null;
 
-  // 1) 优先：verifybox 结构中的背景图
   const verifyBg = root.querySelectorAll(VERIFY_SELECTORS.bgImg);
-  const validVerify = Array.from(verifyBg).filter(
-    (el): el is HTMLImageElement | HTMLCanvasElement =>
-      (el instanceof HTMLImageElement || el instanceof HTMLCanvasElement) &&
-      (el instanceof HTMLCanvasElement || !!(el as HTMLImageElement).src?.trim())
-  );
-  if (validVerify.length > 0) {
-    execLog(
-      'debug',
-      `找到 verifybox 背景图: ${VERIFY_SELECTORS.bgImg}，共 ${validVerify.length} 个`
-    );
-    return validVerify[0];
-  }
-
-  // 2) 兼容：易盾等
-  const fallbackSelectors = [
-    'img.backImg',
-    '.verify-img-panel img',
-    '.yidun_bg-img',
-    '.yidun_bg img',
-    '.yidun_bg canvas',
-    '[class*="bg"] img',
-  ];
-  for (const selector of fallbackSelectors) {
-    const elements = root.querySelectorAll(selector);
-    const valid = Array.from(elements).filter(
-      (el): el is HTMLImageElement | HTMLCanvasElement =>
-        (el instanceof HTMLImageElement || el instanceof HTMLCanvasElement) &&
-        (el instanceof HTMLCanvasElement || !!(el as HTMLImageElement).src?.trim())
-    );
-    if (valid.length > 0) {
-      execLog('debug', `找到背景图: ${selector}`);
-      return valid[0];
-    }
+  const validVerify = verifyBg[0];
+  console.log('validVerify', validVerify);
+  if (verifyBg) {
+    execLog('debug', `找到 verifybox 背景图: ${VERIFY_SELECTORS.bgImg}`);
+    return validVerify as HTMLImageElement | HTMLCanvasElement;
   }
 
   execLog('warn', '未找到背景图片元素');
@@ -700,11 +516,11 @@ async function getCaptchaImagesAndCallAPI(): Promise<number | null> {
   try {
     // 转换为 base64
     execLog('debug', '正在转换滑块图片为 base64...');
-    const targetBase64 = await imageToBase64(sliderImage);
+    const targetBase64 = await imageToBase64(sliderImage as HTMLImageElement);
     execLog('debug', '滑块图片 base64 长度:', targetBase64.length);
 
     execLog('debug', '正在转换背景图片为 base64...');
-    const backgroundBase64 = await imageToBase64(backgroundImage);
+    const backgroundBase64 = await imageToBase64(backgroundImage as HTMLImageElement);
     execLog('debug', '背景图片 base64 长度:', backgroundBase64.length);
 
     // 调用 API
@@ -770,7 +586,6 @@ async function getCaptchaImagesAndCallAPIWithRetry(
 export {
   executeCaptchaClickFlow,
   clickCaptchaPopupTab,
-  clickLoginButton,
   getCaptchaImagesAndCallAPI,
   getCaptchaImagesAndCallAPIWithRetry,
   getSliderPosition,

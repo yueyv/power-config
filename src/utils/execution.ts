@@ -1,5 +1,6 @@
 import { EXECUTION_TYPE } from '@/constants';
 import { executeCaptchaClickFlow } from './slideValid';
+import { keepFirstMaskOnly } from './special';
 
 /**
  * execution 运行在注入的 window 上下文，不能调用插件 API（如 chrome.storage）。
@@ -370,6 +371,8 @@ export class TradeExecution {
       nextChoice: this.nextChoice,
       isTrade: this.isTrade,
     });
+    //   开发环境专属 keepFirstMaskOnly
+    keepFirstMaskOnly(this.iframeDocument as Document);
     await executeCaptchaClickFlow();
 
     if (this.nextChoice.length <= 0) {

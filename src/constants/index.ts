@@ -24,6 +24,9 @@ export const CONNECT_STATUS = {
   INFO: 'info',
   WARN: 'warn',
   CLICK_EVENT: 'click-event',
+  /** 通过 port 请求滑块位置（避免 sendMessage 通道关闭问题） */
+  SLIDER_POSITION_REQUEST: 'slider-position-request',
+  SLIDER_POSITION_RESPONSE: 'slider-position-response',
 };
 
 export const LOGGER_TARGET = {

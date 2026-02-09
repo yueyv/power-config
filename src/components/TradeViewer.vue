@@ -17,7 +17,7 @@
         >
         <el-button
           type="primary"
-          v-if="choiceSellData.length > 0 && tradeStatus === TRADE_STATUS.DISPLAY"
+          v-if="tradeStatus === TRADE_STATUS.DISPLAY"
           @click="handleTradeClick"
           >交易</el-button
         >
@@ -28,27 +28,13 @@
           @click="handleResetClick"
           >重置</el-button
         >
-        <el-input
-          v-model="electricityVolume"
-          :disabled="tradeStatus === TRADE_STATUS.TRADE || tradeStatus === TRADE_STATUS.COMPLETE"
-          placeholder="拟交易电量"
-          style="width: 280px"
-        >
-          <template #prepend>
-            <span>拟交易电量</span>
-          </template>
-          <template #suffix>
-            <span>kWh</span>
-          </template>
-        </el-input>
-        <div class="elec-stats">
-          <span class="stat-item" v-if="tradeStatus === TRADE_STATUS.DISPLAY"
-            >总计:
-            {{
-              choiceSellDataTotal < electricityVolume ? choiceSellDataTotal : electricityVolume
-            }}</span
-          >
-          <span class="stat-item" v-else>实际购买量: {{ actualElectricityVolume }}</span>
+        <div class="elec-volume-display">
+          <span class="elec-volume-label">拟交易电量</span>
+          <span class="elec-volume-value">{{ choiceSellDataTotal }}</span>
+          <span class="elec-volume-unit">kWh</span>
+        </div>
+        <div class="elec-stats" v-if="tradeStatus !== TRADE_STATUS.DISPLAY">
+          <span class="stat-item">实际购买量: {{ actualElectricityVolume }}</span>
         </div>
       </div>
     </div>
@@ -79,12 +65,7 @@ import { computed, h, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
 import { CheckboxValueType, ElButton, ElCheckbox, ElInput, ElMessageBox } from 'element-plus';
 import { TRADE_STATUS } from '@/constants';
 import { getTimeLeftMs } from '@/utils/tradePriority';
-import {
-  getChoiceSellData,
-  getTradeElectricityVolume,
-  setTradeElectricityVolume,
-} from '@/model/sellData';
-const electricityVolume = ref(0);
+import { getChoiceSellData, setTradeElectricityVolume } from '@/model/sellData';
 const emits = defineEmits(['trade', 'cancel', 'reset', 'continue']);
 const props = defineProps<{
   diaelecHeight?: number;
@@ -116,11 +97,9 @@ watch(
 watch(
   () => [...choiceSellData.value],
   (gpids) => {
-    const list = orderedViewData.value;
     gpids.forEach((gpid) => {
       if (manualElecVolume[gpid] === undefined) {
-        const item = list.find((r) => r.gpid === gpid);
-        manualElecVolume[gpid] = item?.sydl ?? 0;
+        manualElecVolume[gpid] = 0; // 新选中时默认 0，已有值则保留（不覆盖）
       }
     });
   },
@@ -225,10 +204,7 @@ const columns = ref<any>([
       return h(ElCheckbox, {
         modelValue: choiceSellData.value.includes(rowData.gpid),
         key: rowData.gpid,
-        disabled:
-          (choiceSellDataTotal.value >= electricityVolume.value &&
-            !choiceSellData.value.includes(rowData.gpid)) ||
-          props.tradeStatus !== TRADE_STATUS.DISPLAY,
+        disabled: props.tradeStatus !== TRADE_STATUS.DISPLAY,
         onChange: (value: CheckboxValueType) => {
           if (value) {
             choiceSellData.value = sortSelectedByPriceAndCountdown([
@@ -242,26 +218,16 @@ const columns = ref<any>([
       });
     },
     headerCellRenderer: () => {
+      const list = orderedViewData.value;
+      const allSelected = list.length > 0 && choiceSellData.value.length === list.length;
+      const someSelected = choiceSellData.value.length > 0;
       return h(ElCheckbox, {
-        modelValue:
-          choiceSellDataTotal.value >= electricityVolume.value && choiceSellDataTotal.value > 0,
-        indeterminate:
-          choiceSellDataTotal.value > 0 && choiceSellDataTotal.value < electricityVolume.value,
+        modelValue: allSelected,
+        indeterminate: someSelected && !allSelected,
         disabled: props.tradeStatus !== TRADE_STATUS.DISPLAY,
         onChange: (value: CheckboxValueType) => {
           if (value) {
-            const list = orderedViewData.value;
-            const nextGpids = [...choiceSellData.value];
-            let volumeSoFar = choiceSellDataTotal.value;
-            let i = 0;
-            while (volumeSoFar < electricityVolume.value && i < list.length) {
-              const item = list[i];
-              if (!nextGpids.includes(item.gpid)) {
-                nextGpids.push(item.gpid);
-                volumeSoFar += item.sydl ?? 0;
-              }
-              i++;
-            }
+            const nextGpids = list.map((item) => item.gpid);
             choiceSellData.value = sortSelectedByPriceAndCountdown(nextGpids);
           } else {
             choiceSellData.value = [];
@@ -406,10 +372,13 @@ const columns = ref<any>([
 /** 确认并发送交易；发送后由父组件立刻显示等待倒计时（若有） */
 async function handleTradeClick() {
   const tradeData = buildTradeData();
-  if (tradeData.length === 0) return;
+  if (tradeData.length === 0) {
+    ElMessage.error('请选择要交易的项目');
+    return;
+  }
   await ElMessageBox.confirm(
     `确定要交易吗？拟交易电量：${
-      electricityVolume.value
+      choiceSellDataTotal.value
     }kWh，交易挂牌id：${choiceSellData.value.join(',')}`,
     '提示',
     {
@@ -417,13 +386,12 @@ async function handleTradeClick() {
       cancelButtonText: '取消',
     }
   );
-  setTradeElectricityVolume(electricityVolume.value);
+  setTradeElectricityVolume(choiceSellDataTotal.value);
   emits('trade', tradeData);
 }
 
 const buildTradeData = (): { id: number; elecVolume: number }[] => {
   const tradeData: { id: number; elecVolume: number }[] = [];
-  let remainingTotal = electricityVolume.value;
   const list = orderedViewData.value;
   choiceSellData.value.forEach((gpid) => {
     const item = list.find((r) => r.gpid === gpid);
@@ -432,9 +400,8 @@ const buildTradeData = (): { id: number; elecVolume: number }[] => {
     const vol =
       manual !== undefined && Number.isFinite(manual)
         ? Math.min(Math.max(0, manual), item.sydl)
-        : Math.min(item.sydl, Math.max(0, remainingTotal));
+        : item.sydl ?? 0;
     if (vol <= 0) return;
-    remainingTotal -= vol;
     tradeData.push({ id: item.gpid, elecVolume: vol });
   });
   return tradeData;
@@ -458,11 +425,6 @@ const handleResetClick = () => {
 
 let countdownTimer: ReturnType<typeof setInterval> | null = null;
 onMounted(() => {
-  getTradeElectricityVolume().then((volume: number | undefined) => {
-    if (volume) {
-      electricityVolume.value = volume;
-    }
-  });
   getChoiceSellData().then((data: CHOICE_SELL_DATA) => {
     if (data) {
       choiceSellData.value = [
@@ -470,6 +432,14 @@ onMounted(() => {
         data.currentChoice?.id,
         ...data.nextChoice.map((item) => item.id),
       ];
+      data.prevChoice.forEach((item) => {
+        manualElecVolume[item.id] = item.elecVolume;
+      });
+      data.currentChoice?.id &&
+        (manualElecVolume[data.currentChoice.id] = data.currentChoice.elecVolume);
+      data.nextChoice.forEach((item) => {
+        manualElecVolume[item.id] = item.elecVolume;
+      });
     }
   });
   countdownTimer = setInterval(() => {
@@ -521,7 +491,31 @@ onUnmounted(() => {
   backdrop-filter: blur(10px);
 }
 
-//
+.elec-volume-display {
+  display: flex;
+  align-items: center;
+  padding: 4px 12px;
+  gap: 8px;
+  color: #081440;
+  background: rgba(255, 255, 255, 0.25);
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+
+  .elec-volume-label {
+    font-size: 13px;
+    opacity: 0.95;
+  }
+
+  .elec-volume-value {
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .elec-volume-unit {
+    font-size: 12px;
+    opacity: 0.9;
+  }
+}
 </style>
 <style lang="scss">
 .elec-table {
