@@ -375,7 +375,6 @@ export class TradeExecution {
     keepFirstMaskOnly(this.iframeDocument as Document);
     await executeCaptchaClickFlow();
     await new Promise((resolve) => setTimeout(resolve, 1000));
-
     if (this.nextChoice.length <= 0) {
       window.postMessage(
         { type: EXECUTION_TYPE.TRADE_END, message: JSON.stringify(this.currentChoice) },

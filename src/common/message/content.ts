@@ -145,20 +145,18 @@ export function useBackgroundConnection(options?: UseBackgroundConnectionOptions
         if (!parsed) break;
         const choiceSellData: CHOICE_SELL_DATA = await updateTradeData(parsed);
         logInfo('content', '完成选择', event.data.message);
-        // todo
-        return;
-        const proceed = await ElMessageBox.confirm('确定 继续交易吗？', '提示', {
-          confirmButtonText: '确定',
-          cancelButtonText: '取消',
-        })
-          .then(() => true)
-          .catch(() => false);
-        if (!proceed) {
-          tradeStatus.value = TRADE_STATUS.CANCEL_TRADE;
-          setSellDataStatus(tradeStatus.value);
-          logAction('content', '异常停止，终止交易');
-          break;
-        }
+        // const proceed = await ElMessageBox.confirm('确定 继续交易吗？', '提示', {
+        //   confirmButtonText: '确定',
+        //   cancelButtonText: '取消',
+        // })
+        //   .then(() => true)
+        //   .catch(() => false);
+        // if (!proceed) {
+        tradeStatus.value = TRADE_STATUS.CANCEL_TRADE;
+        setSellDataStatus(tradeStatus.value);
+        logAction('content', '异常停止，终止交易');
+        //   break;
+        // }
         // 下一步交易：统一走倒计时检查后再发送
         await sendTradeWithCountdownCheck(choiceSellData);
         break;

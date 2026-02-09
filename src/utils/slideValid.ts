@@ -209,7 +209,7 @@ async function executeCaptchaClickFlow(): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, 500));
   execLog('info', '验证码流程就绪，开始识别并滑动');
   await new Promise((resolve) => setTimeout(resolve, 1500));
-  await getCaptchaImagesAndCallAPIWithRetry(3, 2000);
+  await getCaptchaImagesAndCallAPIWithRetry(5, 3000);
 }
 
 /**
@@ -555,7 +555,7 @@ async function getCaptchaImagesAndCallAPI(): Promise<void> {
 async function getCaptchaImagesAndCallAPIWithRetry(
   maxRetries: number = 3,
   retryDelay: number = 1000
-): Promise<number | null> {
+): Promise<boolean> {
   let lastError: Error | null = null;
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
@@ -565,7 +565,7 @@ async function getCaptchaImagesAndCallAPIWithRetry(
       await new Promise((resolve) => setTimeout(resolve, 500));
       if (isMaskInVisible()) {
         execLog('info', 'mask 已隐藏，视为验证通过');
-        return 0;
+        return true;
       }
       execLog('warn', `第 ${attempt} 次尝试返回 null，准备重试...`);
       lastError = new Error('获取验证码图片返回 null');
@@ -585,7 +585,7 @@ async function getCaptchaImagesAndCallAPIWithRetry(
   if (lastError) {
     execLog('error', '最后一次错误:', lastError);
   }
-  return null;
+  return false;
 }
 
 // 导出函数供外部调用
