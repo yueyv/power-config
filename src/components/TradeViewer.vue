@@ -28,6 +28,7 @@
           @click="handleResetClick"
           >重置</el-button
         >
+        <el-button plain @click="curveFitVisible = true">曲线拟合</el-button>
         <div class="elec-volume-display">
           <span class="elec-volume-label">拟交易电量</span>
           <span class="elec-volume-value">{{ choiceSellDataTotal }}</span>
@@ -45,11 +46,42 @@
           :data="orderedViewData"
           :width="width"
           :height="height"
+          :row-class="getRowClass"
           fixed
           class="elec-table"
         />
       </template>
     </el-auto-resizer>
+    <CurveFitDialog v-model="curveFitVisible" />
+    <el-dialog
+      v-model="detailVisible"
+      title="电量详情"
+      width="40%"
+      max-width="960px"
+      destroy-on-close
+      class="curve-detail-dialog"
+    >
+      <el-table
+        v-if="detailTableData.length > 0"
+        :data="detailTableData"
+        border
+        size="small"
+        max-height="400"
+        class="curve-detail-table"
+      >
+        <el-table-column prop="hydate" label="日期" width="110" align="center" />
+        <el-table-column prop="daySum" label="总电量" width="100" align="center" />
+        <el-table-column
+          v-for="h in 24"
+          :key="h"
+          :prop="`h${h - 1}`"
+          :label="`h${h - 1}`"
+          width="72"
+          align="center"
+        />
+      </el-table>
+      <p v-else class="curve-detail-empty">暂无电量数据。</p>
+    </el-dialog>
   </div>
 </template>
 
@@ -61,11 +93,25 @@ import 'element-plus/theme-chalk/el-dialog.css';
 import 'element-plus/theme-chalk/el-checkbox.css';
 import 'element-plus/theme-chalk/el-input.css';
 import 'element-plus/theme-chalk/el-table-v2.css';
+import 'element-plus/theme-chalk/el-table.css';
 import { computed, h, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
-import { CheckboxValueType, ElButton, ElCheckbox, ElInput, ElMessageBox } from 'element-plus';
+import {
+  CheckboxValueType,
+  ElButton,
+  ElCheckbox,
+  ElInput,
+  ElMessage,
+  ElMessageBox,
+} from 'element-plus';
 import { TRADE_STATUS } from '@/constants';
 import { getTimeLeftMs } from '@/utils/tradePriority';
 import { getChoiceSellData, setTradeElectricityVolume } from '@/model/sellData';
+import { useTradeCurveStore } from '@/stores/tradeCurve';
+import { computeFitCorrelation, getFitLevel } from '@/utils/curveFit';
+import CurveFitDialog from '@/components/CurveFitDialog.vue';
+
+import type { CHOICE_SELL_DATA, SELL_DATA_ITEM } from '@/types';
+
 const emits = defineEmits(['trade', 'cancel', 'reset', 'continue']);
 const props = defineProps<{
   diaelecHeight?: number;
@@ -75,13 +121,26 @@ const props = defineProps<{
 }>();
 
 const choiceSellData = ref<number[]>([]);
+const curveFitVisible = ref(false);
+const detailVisible = ref(false);
+const detailGpid = ref<number | null>(null);
+
+const tradeCurveStore = useTradeCurveStore();
+
+/** 详情弹窗表格数据：当前查看的交易 id 对应的曲线多日数据 */
+const detailTableData = computed(() => {
+  const gpid = detailGpid.value;
+  if (gpid == null) return [];
+  return tradeCurveStore.getByCjid(gpid) ?? [];
+});
+
 /** 每行手动填写的购买电量（gpid -> 电量），仅对选中行生效；未填时用剩余电量或拟交易分配值 */
 const manualElecVolume = reactive<Record<number, number>>({});
 /** 每秒更新，用于驱动倒计时列用「当前时间戳」与「摘牌时间戳」重新计算并刷新 */
 const countdownTick = ref(0);
 
 const eligible = computed(() =>
-  props.data.filter((item) => item.bfcj === '是' && item.dprice === item.xhprice)
+  props.data.filter((item: SELL_DATA_ITEM) => item.bfcj === '是' && item.dprice === item.xhprice)
 );
 /** 表格只按挂牌价格排序；数据源变化时重置 */
 const orderedViewData = ref<SELL_DATA_ITEM[]>([]);
@@ -110,7 +169,7 @@ watch(
 function sortSelectedByPriceAndCountdown(gpids: number[]): number[] {
   const list = orderedViewData.value;
   return [...gpids]
-    .map((gpid) => list.find((r) => r.gpid === gpid))
+    .map((gpid) => list.find((r: SELL_DATA_ITEM) => r.gpid === gpid))
     .filter((item): item is SELL_DATA_ITEM => !!item)
     .sort((a, b) => {
       const pa = a.gpdj ?? 0;
@@ -129,7 +188,7 @@ function sortSelectedByPriceAndCountdown(gpids: number[]): number[] {
 const choiceSellDataTotal = computed(() => {
   const list = orderedViewData.value;
   return choiceSellData.value.reduce((acc, gpid) => {
-    const item = list.find((r) => r.gpid === gpid);
+    const item = list.find((r: SELL_DATA_ITEM) => r.gpid === gpid);
     const vol =
       item &&
       (manualElecVolume[gpid] !== undefined && Number.isFinite(manualElecVolume[gpid])
@@ -302,6 +361,27 @@ const columns = ref<any>([
     },
   },
   {
+    key: 'curveDetail',
+    title: '查看详情',
+    width: 90,
+    align: 'center',
+    cellRenderer: ({ rowData }: { rowData: SELL_DATA_ITEM }) => {
+      return h(
+        'a',
+        {
+          class: 'curve-detail-link',
+          href: 'javascript:void(0)',
+          onClick: (e: Event) => {
+            e.preventDefault();
+            detailGpid.value = rowData.gpid;
+            detailVisible.value = true;
+          },
+        },
+        '查看详情'
+      );
+    },
+  },
+  {
     key: 'hybdsj',
     title: '合约标的时间',
     width: 180,
@@ -394,13 +474,13 @@ const buildTradeData = (): { id: number; elecVolume: number }[] => {
   const tradeData: { id: number; elecVolume: number }[] = [];
   const list = orderedViewData.value;
   choiceSellData.value.forEach((gpid) => {
-    const item = list.find((r) => r.gpid === gpid);
+    const item = list.find((r: SELL_DATA_ITEM) => r.gpid === gpid);
     if (!item) return;
     const manual = manualElecVolume[gpid];
     const vol =
       manual !== undefined && Number.isFinite(manual)
         ? Math.min(Math.max(0, manual), item.sydl)
-        : item.sydl ?? 0;
+        : (item.sydl ?? 0);
     if (vol <= 0) return;
     tradeData.push({ id: item.gpid, elecVolume: vol });
   });
@@ -423,21 +503,33 @@ const handleResetClick = () => {
   emits('reset');
 };
 
+/** 根据参考曲线与行曲线拟合程度返回行 class，用于表格着色 */
+function getRowClass({ rowData }: { rowData: SELL_DATA_ITEM }): string {
+  const refCurve = tradeCurveStore.refCurve;
+  if (!refCurve?.length) return '';
+  const dayList = tradeCurveStore.getByCjid(rowData.gpid);
+  const corr = computeFitCorrelation(refCurve, dayList);
+  if (corr === null) return '';
+  const level = getFitLevel(corr);
+  if (level === 'none') return '';
+  return `fit-${level}`;
+}
+
 let countdownTimer: ReturnType<typeof setInterval> | null = null;
 onMounted(() => {
   getChoiceSellData().then((data: CHOICE_SELL_DATA) => {
     if (data) {
       choiceSellData.value = [
         ...data.prevChoice.map((item) => item.id),
-        data.currentChoice?.id,
+        ...(data.currentChoice ? [data.currentChoice.id] : []),
         ...data.nextChoice.map((item) => item.id),
       ];
-      data.prevChoice.forEach((item) => {
+      data.prevChoice.forEach((item: { id: number; elecVolume: number }) => {
         manualElecVolume[item.id] = item.elecVolume;
       });
       data.currentChoice?.id &&
         (manualElecVolume[data.currentChoice.id] = data.currentChoice.elecVolume);
-      data.nextChoice.forEach((item) => {
+      data.nextChoice.forEach((item: { id: number; elecVolume: number }) => {
         manualElecVolume[item.id] = item.elecVolume;
       });
     }
@@ -776,5 +868,42 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
   gap: 4px;
+}
+
+.curve-detail-link {
+  color: #409eff;
+  text-decoration: none;
+  font-size: 12px;
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+.curve-detail-empty {
+  margin: 0;
+  padding: 24px;
+  color: #909399;
+  text-align: center;
+  font-size: 13px;
+}
+
+/* 曲线拟合程度行着色 */
+.elec-table :deep(.el-table-v2__row.fit-high) {
+  background-color: #e8f5e9 !important;
+}
+.elec-table :deep(.el-table-v2__row.fit-high:hover) {
+  background-color: #c8e6c9 !important;
+}
+.elec-table :deep(.el-table-v2__row.fit-medium) {
+  background-color: #fff8e1 !important;
+}
+.elec-table :deep(.el-table-v2__row.fit-medium:hover) {
+  background-color: #ffecb3 !important;
+}
+.elec-table :deep(.el-table-v2__row.fit-low) {
+  background-color: #ffebee !important;
+}
+.elec-table :deep(.el-table-v2__row.fit-low:hover) {
+  background-color: #ffcdd2 !important;
 }
 </style>

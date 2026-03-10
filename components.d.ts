@@ -13,9 +13,13 @@ export {}
 declare module 'vue' {
   export interface GlobalComponents {
     Affix: typeof import('./src/components/Affix.vue')['default']
+    CurveFitDialog: typeof import('./src/components/CurveFitDialog.vue')['default']
     ElAutoResizer: typeof import('element-plus/es')['ElAutoResizer']
+    ElButton: typeof import('element-plus/es')['ElButton']
     ElConfigProvider: typeof import('element-plus/es')['ElConfigProvider']
     ElDialog: typeof import('element-plus/es')['ElDialog']
+    ElTable: typeof import('element-plus/es')['ElTable']
+    ElTableColumn: typeof import('element-plus/es')['ElTableColumn']
     ElTableV2: typeof import('element-plus/es')['ElTableV2']
     LogViewer: typeof import('./src/components/LogViewer.vue')['default']
     TradeViewer: typeof import('./src/components/TradeViewer.vue')['default']
@@ -26,9 +30,13 @@ declare module 'vue' {
 // For TSX support
 declare global {
   const Affix: typeof import('./src/components/Affix.vue')['default']
+  const CurveFitDialog: typeof import('./src/components/CurveFitDialog.vue')['default']
   const ElAutoResizer: typeof import('element-plus/es')['ElAutoResizer']
+  const ElButton: typeof import('element-plus/es')['ElButton']
   const ElConfigProvider: typeof import('element-plus/es')['ElConfigProvider']
   const ElDialog: typeof import('element-plus/es')['ElDialog']
+  const ElTable: typeof import('element-plus/es')['ElTable']
+  const ElTableColumn: typeof import('element-plus/es')['ElTableColumn']
   const ElTableV2: typeof import('element-plus/es')['ElTableV2']
   const LogViewer: typeof import('./src/components/LogViewer.vue')['default']
   const TradeViewer: typeof import('./src/components/TradeViewer.vue')['default']

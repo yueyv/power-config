@@ -1,4 +1,5 @@
 import { createApp } from 'vue';
+import { createPinia } from 'pinia';
 import App from './views/App.vue';
 import '@/assets/style/reset.scss';
 import 'virtual:uno.css';
@@ -14,6 +15,7 @@ function mountApp() {
 
   document.body.appendChild(container);
   const app = createApp(App);
+  app.use(createPinia());
   app.mount(container);
 }
 

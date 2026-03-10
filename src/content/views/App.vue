@@ -29,6 +29,7 @@ import { onMounted, onUnmounted, ref, watch } from 'vue';
 import { useBackgroundConnection } from '@/common/message/content';
 import WaitCountdownDialog from '@/components/WaitCountdownDialog.vue';
 import { getTimeLeftMs } from '@/utils/tradePriority';
+import { useTradeCurveStore } from '@/stores/tradeCurve';
 
 const nextWaitVisible = ref(false);
 const nextWaitMs = ref(0);
@@ -84,6 +85,7 @@ const {
   continueTradeIframe,
   requestSyncSellData,
 } = useBackgroundConnection({ showWaitCountdown });
+const tradeCurveStore = useTradeCurveStore();
 const visible = ref(false);
 let syncTimer: ReturnType<typeof setInterval> | null = null;
 const handleClick = () => {
@@ -98,6 +100,11 @@ watch(visible, (v) => {
   if (v) {
     requestSyncSellData();
     syncTimer = setInterval(requestSyncSellData, 1000);
+    // 打开弹窗时按交易 id 检查并拉取曲线数据（缺则请求接口）
+    const cjids = sellData.value.map((r) => r.gpid);
+    if (cjids.length > 0) {
+      tradeCurveStore.ensureCurveData(cjids);
+    }
   }
 });
 onUnmounted(() => {

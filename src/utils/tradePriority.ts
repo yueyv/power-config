@@ -8,6 +8,7 @@
  * 使用 getRecommendedTradeOrder() 得到按该顺序排列的列表。
  */
 type MaybeString = string | null | undefined;
+import type { SELL_DATA_ITEM } from '@/types';
 
 function parseDateTimeToMs(input: MaybeString): number | null {
   if (!input) return null;
@@ -62,9 +63,7 @@ function parseCountdownToMs(input: MaybeString): number | null {
   return null;
 }
 
-export function getTimeLeftMs(
-  item: Pick<SELL_DATA_ITEM, 'xtdqsj' | 'zpsysj' | 'actionCountdownSeconds' | 'availableAtMs'>
-): number | null {
+export function getTimeLeftMs(item: SELL_DATA_ITEM): number | null {
   // 优先：摘牌时间戳(availableAtMs) - 当前时间戳(Date.now())，剩余毫秒
   if (item.availableAtMs !== undefined && Number.isFinite(item.availableAtMs)) {
     const nowMs = Date.now();

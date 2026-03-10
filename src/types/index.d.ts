@@ -98,7 +98,7 @@ interface BackgroundConnectionMessage {
   message?: any;
 }
 
-interface BUY_DATA_ITEM {
+export interface BUY_DATA_ITEM {
   // 唯一id
   gpid: number;
   // 挂牌电量
@@ -125,13 +125,12 @@ interface BUY_DATA_ITEM {
   availableAtMs?: number;
 }
 
-interface CHOICE_SELL_DATA {
+export interface CHOICE_SELL_DATA {
   prevChoice: { id: number; elecVolume: number }[];
-  currentChoice: { id: number; elecVolume: number };
+  currentChoice?: { id: number; elecVolume: number };
   nextChoice: { id: number; elecVolume: number }[];
 }
-
-interface SELL_DATA_ITEM {
+export interface SELL_DATA_ITEM {
   gpdl: number;
   dprice: number;
   gpid: number;
@@ -147,7 +146,7 @@ interface SELL_DATA_ITEM {
   /** 可摘牌/到期时间戳（毫秒），解析时写入；展示时 剩余 = availableAtMs - Date.now() */
   availableAtMs?: number;
 }
-interface MCGPTableRow {
+export interface MCGPTableRow {
   挂牌电量: number;
   剩余电量: number;
   挂牌价格: number;
@@ -157,4 +156,34 @@ interface MCGPTableRow {
   合约标的时间: string;
   操作ID: number;
   详情ID: number;
+}
+
+/** 交易曲线单日数据（接口 querydatabale 返回的每条） */
+export interface TradeCurveDayItem {
+  hydate: string;
+  daySum: string;
+  h0: string;
+  h1: string;
+  h2: string;
+  h3: string;
+  h4: string;
+  h5: string;
+  h6: string;
+  h7: string;
+  h8: string;
+  h9: string;
+  h10: string;
+  h11: string;
+  h12: string;
+  h13: string;
+  h14: string;
+  h15: string;
+  h16: string;
+  h17: string;
+  h18: string;
+  h19: string;
+  h20: string;
+  h21: string;
+  h22: string;
+  h23: string;
 }
