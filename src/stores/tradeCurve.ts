@@ -36,7 +36,12 @@ export const useTradeCurveStore = defineStore('tradeCurve', {
         form.set('cjid', String(cjid));
         const res = await fetch(JYSB_QUERY_URL, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+            Accept: 'application/json, text/javascript, */*; q=0.01',
+            'X-Requested-With': 'XMLHttpRequest',
+          },
+          credentials: 'include',
           body: form.toString(),
         });
         if (!res.ok) {
