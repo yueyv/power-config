@@ -1,8 +1,7 @@
 import { defineStore } from 'pinia';
 import type { TradeCurveDayItem } from '@/types';
 
-const JYSB_QUERY_URL =
-  'https://pmos.sd.sgcc.com.cn:18080/zcq/scgpjy/jysb.do?method=querydatabale';
+const JYSB_QUERY_URL = 'https://pmos.sd.sgcc.com.cn:18080/zcq/scgpjy/jysb.do?method=querydatabale';
 
 export const useTradeCurveStore = defineStore('tradeCurve', {
   state: () => ({
@@ -37,7 +36,7 @@ export const useTradeCurveStore = defineStore('tradeCurve', {
         form.set('cjid', String(cjid));
         const res = await fetch(JYSB_QUERY_URL, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          headers: { 'Content-Type': 'application/json' },
           body: form.toString(),
         });
         if (!res.ok) {
