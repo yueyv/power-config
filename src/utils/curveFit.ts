@@ -1,9 +1,30 @@
 import type { TradeCurveDayItem } from '@/types';
 
 const H_KEYS = [
-  'h0', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'h7', 'h8', 'h9',
-  'h10', 'h11', 'h12', 'h13', 'h14', 'h15', 'h16', 'h17', 'h18', 'h19',
-  'h20', 'h21', 'h22', 'h23',
+  'h0',
+  'h1',
+  'h2',
+  'h3',
+  'h4',
+  'h5',
+  'h6',
+  'h7',
+  'h8',
+  'h9',
+  'h10',
+  'h11',
+  'h12',
+  'h13',
+  'h14',
+  'h15',
+  'h16',
+  'h17',
+  'h18',
+  'h19',
+  'h20',
+  'h21',
+  'h22',
+  'h23',
 ] as const;
 
 /** 从单日曲线数据取出 24 点数值 */
@@ -47,18 +68,18 @@ export function getFitLevel(corr: number): FitLevel {
 }
 
 /**
- * 计算参考曲线与某交易曲线数据的拟合程度（取多日中与参考曲线相关度最高的一日）
+ * 计算参考曲线与某交易曲线数据的“最不相似程度”（取多日中与参考曲线相关度最低的一日）
  */
 export function computeFitCorrelation(
   refCurve: number[],
   dayList: TradeCurveDayItem[] | undefined
 ): number | null {
   if (!refCurve.length || !dayList?.length) return null;
-  let maxCorr = -2;
+  let minCorr = 2;
   for (const day of dayList) {
     const curve = curveFromDay(day);
     const c = correlation(refCurve, curve);
-    if (c > maxCorr) maxCorr = c;
+    if (c < minCorr) minCorr = c;
   }
-  return maxCorr;
+  return minCorr;
 }
