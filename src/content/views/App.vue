@@ -100,13 +100,18 @@ watch(visible, (v) => {
   if (v) {
     requestSyncSellData();
     syncTimer = setInterval(requestSyncSellData, 1000);
-    // 打开弹窗时按交易 id 检查并拉取曲线数据（缺则请求接口）
-    const cjids = sellData.value.map((r) => r.gpid);
-    if (cjids.length > 0) {
-      tradeCurveStore.ensureCurveData(cjids);
-    }
   }
 });
+// 弹窗打开且 sellData 有数据时拉取曲线（含刚打开时数据尚未同步到的情形）
+watch(
+  () => (visible.value ? sellData.value.map((r) => r.gpid) : []),
+  (cjids) => {
+    if (visible.value && cjids.length > 0) {
+      tradeCurveStore.ensureCurveData(cjids);
+    }
+  },
+  { immediate: true }
+);
 onUnmounted(() => {
   if (syncTimer) clearInterval(syncTimer);
   if (nextWaitTimer) clearInterval(nextWaitTimer);

@@ -34,20 +34,24 @@ export const useTradeCurveStore = defineStore('tradeCurve', {
       try {
         const form = new URLSearchParams();
         form.set('cjid', String(cjid));
-        const res = await fetch(JYSB_QUERY_URL, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-            Accept: 'application/json, text/javascript, */*; q=0.01',
-            'X-Requested-With': 'XMLHttpRequest',
-          },
-          credentials: 'include',
-          body: form.toString(),
+        const raw = await new Promise<string>((resolve, reject) => {
+          const xhr = new XMLHttpRequest();
+          xhr.open('POST', JYSB_QUERY_URL, true);
+          xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded; charset=UTF-8');
+          xhr.setRequestHeader('Accept', 'application/json, text/javascript, */*; q=0.01');
+          xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+          xhr.withCredentials = true;
+          xhr.onreadystatechange = () => {
+            if (xhr.readyState !== 4) return;
+            if (xhr.status >= 200 && xhr.status < 300) {
+              resolve(xhr.responseText);
+            } else {
+              reject(new Error(`HTTP ${xhr.status}`));
+            }
+          };
+          xhr.onerror = () => reject(new Error('XHR error'));
+          xhr.send(form.toString());
         });
-        if (!res.ok) {
-          return null;
-        }
-        const raw = await res.text();
         let data: TradeCurveDayItem[] = [];
         try {
           const parsed = JSON.parse(raw);
