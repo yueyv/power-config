@@ -42,7 +42,7 @@ import 'element-plus/theme-chalk/el-table-v2.css';
 import { clearLogs, getLogs } from '@/model/log';
 import { onMounted, onUnmounted, ref, h } from 'vue';
 import dayjs from 'dayjs';
-import { ElButton, ElMessageBox, ElTag, ElTooltip } from 'element-plus';
+import { ElButton, ElMessage, ElMessageBox, ElTag, ElTooltip } from 'element-plus';
 import { LOGGER_NAME } from '@/constants';
 
 const tableData = ref<any>([]);

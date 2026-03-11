@@ -1,5 +1,4 @@
 import { defineStore } from 'pinia';
-import type { TradeCurveDayItem } from '@/types';
 import { EXECUTION_TYPE, REF_CURVE_KEY } from '@/constants';
 
 export const useTradeCurveStore = defineStore('tradeCurve', {

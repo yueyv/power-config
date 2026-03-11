@@ -104,7 +104,7 @@ watch(visible, (v) => {
 });
 // 弹窗打开且 sellData 有数据时拉取曲线（含刚打开时数据尚未同步到的情形）
 watch(
-  () => (visible.value ? sellData.value.map((r) => r.gpid) : []),
+  () => (visible.value ? sellData.value.map((r: SELL_DATA_ITEM) => r.gpid) : []),
   (cjids) => {
     if (visible.value && cjids.length > 0) {
       tradeCurveStore.ensureCurveData(cjids);
@@ -121,7 +121,10 @@ let pendingTradeDataAfterWait: { id: number; elecVolume: number }[] | null = nul
 const handleTrade = (data: { id: number; elecVolume: number }[]) => {
   visible.value = false;
   const firstId = data[0]?.id;
-  const item = firstId != null ? sellData.value.find((r) => r.gpid === firstId) : null;
+  const item =
+    firstId != null
+      ? sellData.value.find((r: SELL_DATA_ITEM) => r.gpid === firstId)
+      : null;
   const ms = item ? getTimeLeftMs(item) : null;
   const hasCountdown = ms !== null && ms > 0;
 
@@ -134,7 +137,7 @@ const handleTrade = (data: { id: number; elecVolume: number }[]) => {
     nextWaitVisible.value = true;
     nextWaitMs.value = ms;
     const getCurrentMs = () => {
-      const i = sellData.value.find((r) => r.gpid === firstId);
+      const i = sellData.value.find((r: SELL_DATA_ITEM) => r.gpid === firstId);
       return i ? getTimeLeftMs(i) : null;
     };
     nextWaitTimer = setInterval(() => {

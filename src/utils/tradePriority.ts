@@ -8,7 +8,6 @@
  * 使用 getRecommendedTradeOrder() 得到按该顺序排列的列表。
  */
 type MaybeString = string | null | undefined;
-import type { SELL_DATA_ITEM } from '@/types';
 
 function parseDateTimeToMs(input: MaybeString): number | null {
   if (!input) return null;

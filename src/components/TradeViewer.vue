@@ -42,7 +42,6 @@
     <el-auto-resizer>
       <template #default="{ height, width }">
         <el-table-v2
-          :key="'curve-' + tradeCurveStore.curveDataVersion + (tradeCurveStore.refCurve ? '-ref' : '')"
           :columns="columns"
           :data="orderedViewData"
           :width="width"
@@ -125,8 +124,6 @@ import { getChoiceSellData, setTradeElectricityVolume } from '@/model/sellData';
 import { useTradeCurveStore } from '@/stores/tradeCurve';
 import { correlation, curveFromDay, computeFitCorrelation, getFitLevel } from '@/utils/curveFit';
 import CurveFitDialog from '@/components/CurveFitDialog.vue';
-
-import type { CHOICE_SELL_DATA, SELL_DATA_ITEM } from '@/types';
 
 const emits = defineEmits(['trade', 'cancel', 'reset', 'continue']);
 const props = defineProps<{
@@ -306,7 +303,8 @@ const columns = ref<any>([
     },
     headerCellRenderer: () => {
       const list = orderedViewData.value;
-      const allSelected = list.length > 0 && choiceSellData.value.length === list.length;
+      const allSelected =
+        list.length > 0 && choiceSellData.value.length === list.length;
       const someSelected = choiceSellData.value.length > 0;
       return h(ElCheckbox, {
         modelValue: allSelected,
@@ -314,7 +312,7 @@ const columns = ref<any>([
         disabled: props.tradeStatus !== TRADE_STATUS.DISPLAY,
         onChange: (value: CheckboxValueType) => {
           if (value) {
-            const nextGpids = list.map((item) => item.gpid);
+            const nextGpids = list.map((item: SELL_DATA_ITEM) => item.gpid);
             choiceSellData.value = sortSelectedByPriceAndCountdown(nextGpids);
           } else {
             choiceSellData.value = [];
@@ -589,9 +587,9 @@ onMounted(() => {
   getChoiceSellData().then((data: CHOICE_SELL_DATA) => {
     if (data) {
       choiceSellData.value = [
-        ...data.prevChoice.map((item) => item.id),
+        ...data.prevChoice.map((item: { id: number; elecVolume: number }) => item.id),
         ...(data.currentChoice ? [data.currentChoice.id] : []),
-        ...data.nextChoice.map((item) => item.id),
+        ...data.nextChoice.map((item: { id: number; elecVolume: number }) => item.id),
       ];
       data.prevChoice.forEach((item: { id: number; elecVolume: number }) => {
         manualElecVolume[item.id] = item.elecVolume;

@@ -173,13 +173,13 @@ if (typeof window !== 'undefined') {
   injectXHRInterceptor({
     targetUrls: TARGET_URLS,
     enableLog: true,
-    onRequest: (method, url) => {
+    onRequest: (method: string, url: string) => {
       sendLoggerMessage(LOGGER_LEVEL.ACTION, `发起请求 ${method} ${url}`);
     },
-    onResponse: (method, url, response, status) => {
+    onResponse: (method: string, url: string, response: any, status: number) => {
       sendLoggerMessage(LOGGER_LEVEL.RESPONSE, `收到响应 ${method} ${url} ${status}`);
     },
-    onError: (method, url, error) => {
+    onError: (method: string, url: string, error: Error) => {
       sendLoggerMessage(LOGGER_LEVEL.ERROR, `错误 ${method} ${url} ${error.message}`, error);
     },
   });

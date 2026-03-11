@@ -64,11 +64,19 @@ async function parseRequestBody(body: BodyInit | null | undefined): Promise<any>
   }
 }
 
+interface LocalFetchInterceptorOptions {
+  targetUrls?: string[];
+  enableLog?: boolean;
+  onRequest?: (method: string, url: string) => void;
+  onResponse?: (method: string, url: string, response: any, status: number) => void;
+  onError?: (method: string, url: string, error: Error) => void;
+}
+
 /**
  * 注入 Fetch 拦截器
  * @param options 配置选项
  */
-export function injectFetchInterceptor(options: FetchInterceptorOptions = {}): void {
+export function injectFetchInterceptor(options: LocalFetchInterceptorOptions = {}): void {
   if ((window as any).__fetchInterceptorInjected) {
     logger.warn('Fetch 拦截器已注入，跳过重复注入');
     return;
@@ -103,14 +111,13 @@ export function injectFetchInterceptor(options: FetchInterceptorOptions = {}): v
     // 检查是否是目标 URL
     if (isTargetUrl(url, targetUrls)) {
       // 解析请求体
-      const requestBody = await parseRequestBody(
-        init?.body || (input instanceof Request ? input.body : null)
-      );
+      // 解析 body（目前仅供调试使用）
+      await parseRequestBody(init?.body || (input instanceof Request ? input.body : null));
 
-      // 触发请求回调
+      // 触发请求回调（不传 body，保持签名简单）
       if (onRequest) {
         try {
-          onRequest(method, url, requestBody);
+          onRequest(method, url);
         } catch (error) {
           logger.error('onRequest 回调执行失败:', error);
         }
@@ -195,13 +202,13 @@ if (typeof window !== 'undefined') {
   injectFetchInterceptor({
     targetUrls: TARGET_URLS,
     enableLog: true,
-    onRequest: (method, url) => {
+    onRequest: (method: string, url: string) => {
       sendLoggerMessage(LOGGER_LEVEL.ACTION, `发起请求 ${method} ${url}`);
     },
-    onResponse: (method, url, response, status) => {
+    onResponse: (method: string, url: string, response: any, status: number) => {
       sendLoggerMessage(LOGGER_LEVEL.RESPONSE, `收到响应 ${method} ${url} ${status}`);
     },
-    onError: (method, url, error) => {
+    onError: (method: string, url: string, error: Error) => {
       sendLoggerMessage(LOGGER_LEVEL.ERROR, `错误 ${method} ${url} ${error.message}`, error);
     },
   });

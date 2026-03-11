@@ -31,7 +31,7 @@ interface FetchInterceptorOptions {
 }
 
 /**
- * 扩展 XMLHttpRequest 接口，添加自定义属性
+ * 扩展 XMLHttpRequest 接口，添加自定义属性（作为全局接口使用）
  */
 interface ExtendedXMLHttpRequest extends XMLHttpRequest {
   _method?: string;
@@ -98,7 +98,7 @@ interface BackgroundConnectionMessage {
   message?: any;
 }
 
-export interface BUY_DATA_ITEM {
+interface BUY_DATA_ITEM {
   // 唯一id
   gpid: number;
   // 挂牌电量
@@ -125,12 +125,12 @@ export interface BUY_DATA_ITEM {
   availableAtMs?: number;
 }
 
-export interface CHOICE_SELL_DATA {
+interface CHOICE_SELL_DATA {
   prevChoice: { id: number; elecVolume: number }[];
   currentChoice?: { id: number; elecVolume: number };
   nextChoice: { id: number; elecVolume: number }[];
 }
-export interface SELL_DATA_ITEM {
+interface SELL_DATA_ITEM {
   gpdl: number;
   dprice: number;
   gpid: number;
@@ -146,7 +146,7 @@ export interface SELL_DATA_ITEM {
   /** 可摘牌/到期时间戳（毫秒），解析时写入；展示时 剩余 = availableAtMs - Date.now() */
   availableAtMs?: number;
 }
-export interface MCGPTableRow {
+interface MCGPTableRow {
   挂牌电量: number;
   剩余电量: number;
   挂牌价格: number;
@@ -159,7 +159,7 @@ export interface MCGPTableRow {
 }
 
 /** 交易曲线单日数据（接口 querydatabale 返回的每条） */
-export interface TradeCurveDayItem {
+interface TradeCurveDayItem {
   hydate: string;
   daySum: string;
   h0: string;
