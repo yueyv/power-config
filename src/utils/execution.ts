@@ -212,6 +212,30 @@ export class TradeExecution {
       | undefined;
     this.iframe = iframeEl?.contentWindow ?? undefined;
     this.iframeDocument = this.iframe?.document;
+    if (this.iframeDocument) {
+      this.injectCurveFetchScript();
+    }
+  }
+
+  /** 供 message 里判断 event.source 是否为当前 iframe */
+  getIframeWindow(): Window | undefined {
+    return this.iframe;
+  }
+
+  /** 在 iframe 内注入脚本：监听 fetch_jysb_curve，在 iframe 上下文中发 XHR 并 postMessage 回传 */
+  private injectCurveFetchScript(): void {
+    const doc = this.iframeDocument;
+    if (!doc?.body) return;
+    const URL =
+      'https://pmos.sd.sgcc.com.cn:18080/zcq/scgpjy/jysb.do?method=querydatabale';
+    const script = doc.createElement('script');
+    script.textContent =
+      `(function(){var U="${URL}";function token(){var e=document.querySelector('meta[name="csrf-token"]')||document.querySelector('meta[name="X-CSRF-TOKEN"]')||document.querySelector('meta[name="_csrf"]');if(e&&e.getAttribute('content'))return e.getAttribute('content');var c=document.cookie||'';var m=c.match(/X-CSRF-TOKEN=([^;]+)/);if(m)return decodeURIComponent(m[1]);m=c.match(/csrf[_-]?token=([^;]+)/i);if(m)return decodeURIComponent(m[1]);return null;}function fetchOne(cjid,cb){var x=new XMLHttpRequest();x.open('POST',U,true);x.setRequestHeader('Content-Type','application/x-www-form-urlencoded; charset=UTF-8');x.setRequestHeader('Accept','application/json, text/javascript, */*; q=0.01');x.setRequestHeader('X-Requested-With','XMLHttpRequest');var t=token();if(t)x.setRequestHeader('X-CSRF-TOKEN',t);x.withCredentials=true;x.onreadystatechange=function(){if(x.readyState!==4)return;var d=[];if(x.status>=200&&x.status<300){try{var p=JSON.parse(x.responseText);d=Array.isArray(p)?p:p&&p.data?p.data:[];}catch(e){}}try{window.parent.postMessage({type:'jysb_curve_result',cjid:cjid,data:d},'*');}catch(e){}if(cb)cb();};x.onerror=function(){try{window.parent.postMessage({type:'jysb_curve_result',cjid:cjid,data:[]},'*');}catch(e){}if(cb)cb();};x.send('cjid='+cjid);}window.addEventListener('message',function(ev){if(!ev.data||ev.data.type!=='fetch_jysb_curve')return;var c=ev.data.cjids;if(!Array.isArray(c)||c.length===0)return;c.forEach(function(id){fetchOne(id);});});})();`;
+    try {
+      doc.body.appendChild(script);
+    } catch (e) {
+      execLog('warn', '注入 iframe 曲线请求脚本失败', e);
+    }
   }
 
   get isReady(): boolean {
@@ -435,7 +459,7 @@ export async function tradeIframe(): Promise<void> {
 }
 
 window.addEventListener('message', (event) => {
-  switch (event.data.type) {
+  switch (event.data?.type) {
     case EXECUTION_TYPE.INITIFRAME:
       tradeExecution.init();
       if (tradeExecution.isReady) {
@@ -476,5 +500,32 @@ window.addEventListener('message', (event) => {
       );
       break;
     }
+
+    case EXECUTION_TYPE.REQUEST_JYSB_CURVE: {
+      const cjids = event.data?.cjids;
+      const iframeWin = tradeExecution.getIframeWindow();
+      if (Array.isArray(cjids) && cjids.length > 0 && iframeWin) {
+        iframeWin.postMessage({ type: 'fetch_jysb_curve', cjids }, '*');
+      }
+      break;
+    }
+
+    default:
+      break;
+  }
+
+  // iframe 内曲线 XHR 完成后回传：由 execution 转发给 content
+  if (
+    event.data?.type === EXECUTION_TYPE.JYSB_CURVE_RESULT &&
+    event.source === tradeExecution.getIframeWindow()
+  ) {
+    window.postMessage(
+      {
+        type: EXECUTION_TYPE.JYSB_CURVE_RESULT,
+        cjid: event.data.cjid,
+        data: event.data.data,
+      },
+      '*'
+    );
   }
 });

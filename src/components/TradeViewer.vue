@@ -42,6 +42,7 @@
     <el-auto-resizer>
       <template #default="{ height, width }">
         <el-table-v2
+          :key="'curve-' + tradeCurveStore.curveDataVersion + (tradeCurveStore.refCurve ? '-ref' : '')"
           :columns="columns"
           :data="orderedViewData"
           :width="width"
@@ -79,6 +80,19 @@
           width="72"
           align="center"
         />
+        <el-table-column label="拟合程度" width="96" align="center" fixed="right">
+          <template #default="{ row }">
+            <el-tag
+              v-if="getDetailFit(row) !== null"
+              :type="getDetailFit(row)?.tagType"
+              size="small"
+              effect="light"
+            >
+              {{ getDetailFit(row)?.label }}
+            </el-tag>
+            <span v-else>—</span>
+          </template>
+        </el-table-column>
       </el-table>
       <p v-else class="curve-detail-empty">暂无电量数据。</p>
     </el-dialog>
@@ -90,6 +104,7 @@ import 'element-plus/theme-chalk/el-button.css';
 import 'element-plus/theme-chalk/el-message.css';
 import 'element-plus/theme-chalk/el-message-box.css';
 import 'element-plus/theme-chalk/el-dialog.css';
+import 'element-plus/theme-chalk/el-tag.css';
 import 'element-plus/theme-chalk/el-checkbox.css';
 import 'element-plus/theme-chalk/el-input.css';
 import 'element-plus/theme-chalk/el-table-v2.css';
@@ -100,6 +115,7 @@ import {
   ElButton,
   ElCheckbox,
   ElInput,
+  ElTag,
   ElMessage,
   ElMessageBox,
 } from 'element-plus';
@@ -107,7 +123,7 @@ import { TRADE_STATUS } from '@/constants';
 import { getTimeLeftMs } from '@/utils/tradePriority';
 import { getChoiceSellData, setTradeElectricityVolume } from '@/model/sellData';
 import { useTradeCurveStore } from '@/stores/tradeCurve';
-import { computeFitCorrelation, getFitLevel } from '@/utils/curveFit';
+import { correlation, curveFromDay, computeFitCorrelation, getFitLevel } from '@/utils/curveFit';
 import CurveFitDialog from '@/components/CurveFitDialog.vue';
 
 import type { CHOICE_SELL_DATA, SELL_DATA_ITEM } from '@/types';
@@ -133,6 +149,18 @@ const detailTableData = computed(() => {
   if (gpid == null) return [];
   return tradeCurveStore.getByCjid(gpid) ?? [];
 });
+
+function getDetailFit(row: any): { label: string; tagType: 'success' | 'warning' | 'danger' } | null {
+  const ref = tradeCurveStore.refCurve;
+  if (!ref?.length) return null;
+  const curve = curveFromDay(row);
+  const corr = correlation(ref, curve);
+  const level = getFitLevel(corr);
+  if (level === 'high') return { label: '高', tagType: 'success' };
+  if (level === 'medium') return { label: '中', tagType: 'warning' };
+  if (level === 'low') return { label: '低', tagType: 'danger' };
+  return null;
+}
 
 /** 每行手动填写的购买电量（gpid -> 电量），仅对选中行生效；未填时用剩余电量或拟交易分配值 */
 const manualElecVolume = reactive<Record<number, number>>({});
@@ -446,6 +474,47 @@ const columns = ref<any>([
     width: 100,
     align: 'center',
     dataKey: 'gpid',
+  },
+  {
+    key: 'fitLevel',
+    title: '匹配度',
+    width: 96,
+    align: 'center',
+    fixed: 'right',
+    cellRenderer: ({ rowData }: { rowData: SELL_DATA_ITEM }) => {
+      const refCurve = tradeCurveStore.refCurve;
+      if (!refCurve?.length) {
+        return h('span', { class: 'fit-cell-none' }, '—');
+      }
+      const dayList = tradeCurveStore.getByCjid(rowData.gpid);
+      const corr = computeFitCorrelation(refCurve, dayList);
+      if (corr === null) {
+        return h('span', { class: 'fit-cell-none' }, '—');
+      }
+      const level = getFitLevel(corr);
+      if (level === 'high') {
+        return h(
+          ElTag,
+          { type: 'success', size: 'small', effect: 'light' },
+          () => '高'
+        );
+      }
+      if (level === 'medium') {
+        return h(
+          ElTag,
+          { type: 'warning', size: 'small', effect: 'light' },
+          () => '中'
+        );
+      }
+      if (level === 'low') {
+        return h(
+          ElTag,
+          { type: 'danger', size: 'small', effect: 'light' },
+          () => '低'
+        );
+      }
+      return h('span', { class: 'fit-cell-none' }, '—');
+    },
   },
 ]);
 

@@ -51,6 +51,9 @@ export const SELL_DATA_STATUS_KEY = 'sellDataStatus';
 
 export const TRADE_ELECTRICITY_VOLUME_KEY = 'tradeElectricityVolume';
 
+/** 曲线拟合参考曲线（24 点）持久化 key */
+export const REF_CURVE_KEY = 'tradeRefCurve';
+
 export enum TRADE_STATUS {
   DISPLAY = 'display',
   TRADE = 'trade',
@@ -73,4 +76,8 @@ export enum EXECUTION_TYPE {
   /** content 回传滑块位置 API 结果给页面 */
   SLIDER_POSITION_RESPONSE = 'slider_position_response',
   REQUEST_SELL_DATA = 'request_sell_data',
+  /** 请求在 iframe 内拉取交易曲线（由 content 发往 execution，再转发 iframe） */
+  REQUEST_JYSB_CURVE = 'request_jysb_curve',
+  /** iframe 内 XHR 完成后回传曲线数据（execution 转发给 content 更新 store） */
+  JYSB_CURVE_RESULT = 'jysb_curve_result',
 }

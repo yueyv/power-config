@@ -1,7 +1,6 @@
 import { defineStore } from 'pinia';
 import type { TradeCurveDayItem } from '@/types';
-
-const JYSB_QUERY_URL = 'https://pmos.sd.sgcc.com.cn:18080/zcq/scgpjy/jysb.do?method=querydatabale';
+import { EXECUTION_TYPE, REF_CURVE_KEY } from '@/constants';
 
 export const useTradeCurveStore = defineStore('tradeCurve', {
   state: () => ({
@@ -9,8 +8,10 @@ export const useTradeCurveStore = defineStore('tradeCurve', {
     byCjid: {} as Record<number, TradeCurveDayItem[]>,
     /** 正在请求的 cjid 集合，避免重复请求 */
     loadingCjids: new Set<number>(),
-    /** 用户输入的参考曲线（24 点），用于表格拟合着色 */
+    /** 用户输入的参考曲线（24 点），用于表格拟合着色；与 chrome.storage 同步 */
     refCurve: null as number[] | null,
+    /** 曲线数据更新版本，用于表格强制重算行样式（byCjid 变化时递增） */
+    curveDataVersion: 0,
   }),
 
   getters: {
@@ -26,54 +27,70 @@ export const useTradeCurveStore = defineStore('tradeCurve', {
   },
 
   actions: {
-    async fetchByCjid(cjid: number): Promise<TradeCurveDayItem[] | null> {
-      if (this.loadingCjids.has(cjid)) {
-        return this.byCjid[cjid] ?? null;
-      }
-      this.loadingCjids.add(cjid);
-      try {
-        const form = new URLSearchParams();
-        form.set('cjid', String(cjid));
-        const res = await fetch(JYSB_QUERY_URL, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-            Accept: 'application/json, text/javascript, */*; q=0.01',
-            'X-Requested-With': 'XMLHttpRequest',
-          },
-          credentials: 'include',
-          body: form.toString(),
+    /**
+     * 从 chrome.storage 恢复参考曲线（应用启动时调用一次）
+     */
+    async initRefCurveFromStorage(): Promise<void> {
+      if (typeof chrome?.storage?.local?.get !== 'function') return;
+      return new Promise((resolve) => {
+        chrome.storage.local.get(REF_CURVE_KEY, (result) => {
+          const raw = result[REF_CURVE_KEY];
+          if (Array.isArray(raw) && raw.length === 24) {
+            const points = raw.map((x) => (typeof x === 'number' && Number.isFinite(x) ? x : 0));
+            this.refCurve = points;
+          }
+          resolve();
         });
-        if (!res.ok) {
-          return null;
-        }
-        const raw = await res.text();
-        let data: TradeCurveDayItem[] = [];
-        try {
-          const parsed = JSON.parse(raw);
-          data = Array.isArray(parsed) ? parsed : parsed?.data ? parsed.data : [];
-        } catch {
-          data = [];
-        }
-        if (data.length > 0) {
-          this.byCjid[cjid] = data;
-        }
-        return data;
-      } catch {
-        return null;
-      } finally {
+      });
+    },
+
+    /**
+     * 通过 postMessage 请求在 iframe（jysb.do）内发起 XHR 拉取曲线；
+     * 结果由 content 收到 JYSB_CURVE_RESULT 后调用 setCurveData 写入。
+     */
+    fetchByCjid(cjid: number): void {
+      if (this.loadingCjids.has(cjid)) return;
+      this.loadingCjids.add(cjid);
+      if (typeof window !== 'undefined') {
+        window.postMessage(
+          { type: EXECUTION_TYPE.REQUEST_JYSB_CURVE, cjids: [cjid] },
+          '*'
+        );
+      } else {
         this.loadingCjids.delete(cjid);
       }
     },
 
-    /** 对一批交易 id 查缺补漏：没有缓存的会请求接口 */
-    async ensureCurveData(cjids: number[]): Promise<void> {
+    /** 收到 iframe 内 XHR 结果时由 content 调用，写入缓存并移除 loading */
+    setCurveData(cjid: number, data: TradeCurveDayItem[]): void {
+      this.loadingCjids.delete(cjid);
+      if (data && data.length > 0) {
+        this.byCjid[cjid] = data;
+        this.curveDataVersion += 1;
+      }
+    },
+
+    /** 对一批交易 id 查缺补漏：没有缓存的会通过 iframe 内 XHR 请求 */
+    ensureCurveData(cjids: number[]): void {
       const missing = cjids.filter((id) => !this.hasCjid(id));
-      await Promise.all(missing.map((cjid) => this.fetchByCjid(cjid)));
+      if (missing.length === 0) return;
+      missing.forEach((cjid) => this.loadingCjids.add(cjid));
+      if (typeof window !== 'undefined') {
+        window.postMessage(
+          { type: EXECUTION_TYPE.REQUEST_JYSB_CURVE, cjids: missing },
+          '*'
+        );
+      } else {
+        missing.forEach((cjid) => this.loadingCjids.delete(cjid));
+      }
     },
 
     setRefCurve(points: number[] | null) {
-      this.refCurve = points && points.length === 24 ? points : null;
+      const value = points && points.length === 24 ? points : null;
+      this.refCurve = value;
+      if (typeof chrome?.storage?.local?.set === 'function') {
+        chrome.storage.local.set({ [REF_CURVE_KEY]: value ?? [] });
+      }
     },
   },
 });
