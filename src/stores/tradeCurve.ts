@@ -1,7 +1,6 @@
 import { defineStore } from 'pinia';
 import type { TradeCurveDayItem } from '@/types';
-
-const JYSB_QUERY_URL = 'https://pmos.sd.sgcc.com.cn:18080/zcq/scgpjy/jysb.do?method=querydatabale';
+import { EXECUTION_TYPE } from '@/constants';
 
 export const useTradeCurveStore = defineStore('tradeCurve', {
   state: () => ({
@@ -26,54 +25,44 @@ export const useTradeCurveStore = defineStore('tradeCurve', {
   },
 
   actions: {
-    async fetchByCjid(cjid: number): Promise<TradeCurveDayItem[] | null> {
-      if (this.loadingCjids.has(cjid)) {
-        return this.byCjid[cjid] ?? null;
-      }
+    /**
+     * 通过 postMessage 请求在 iframe（jysb.do）内发起 XHR 拉取曲线；
+     * 结果由 content 收到 JYSB_CURVE_RESULT 后调用 setCurveData 写入。
+     */
+    fetchByCjid(cjid: number): void {
+      if (this.loadingCjids.has(cjid)) return;
       this.loadingCjids.add(cjid);
-      try {
-        const form = new URLSearchParams();
-        form.set('cjid', String(cjid));
-        const raw = await new Promise<string>((resolve, reject) => {
-          const xhr = new XMLHttpRequest();
-          xhr.open('POST', JYSB_QUERY_URL, true);
-          xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded; charset=UTF-8');
-          xhr.setRequestHeader('Accept', 'application/json, text/javascript, */*; q=0.01');
-          xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
-          xhr.withCredentials = true;
-          xhr.onreadystatechange = () => {
-            if (xhr.readyState !== 4) return;
-            if (xhr.status >= 200 && xhr.status < 300) {
-              resolve(xhr.responseText);
-            } else {
-              reject(new Error(`HTTP ${xhr.status}`));
-            }
-          };
-          xhr.onerror = () => reject(new Error('XHR error'));
-          xhr.send(form.toString());
-        });
-        let data: TradeCurveDayItem[] = [];
-        try {
-          const parsed = JSON.parse(raw);
-          data = Array.isArray(parsed) ? parsed : parsed?.data ? parsed.data : [];
-        } catch {
-          data = [];
-        }
-        if (data.length > 0) {
-          this.byCjid[cjid] = data;
-        }
-        return data;
-      } catch {
-        return null;
-      } finally {
+      if (typeof window !== 'undefined') {
+        window.postMessage(
+          { type: EXECUTION_TYPE.REQUEST_JYSB_CURVE, cjids: [cjid] },
+          '*'
+        );
+      } else {
         this.loadingCjids.delete(cjid);
       }
     },
 
-    /** 对一批交易 id 查缺补漏：没有缓存的会请求接口 */
-    async ensureCurveData(cjids: number[]): Promise<void> {
+    /** 收到 iframe 内 XHR 结果时由 content 调用，写入缓存并移除 loading */
+    setCurveData(cjid: number, data: TradeCurveDayItem[]): void {
+      this.loadingCjids.delete(cjid);
+      if (data && data.length > 0) {
+        this.byCjid[cjid] = data;
+      }
+    },
+
+    /** 对一批交易 id 查缺补漏：没有缓存的会通过 iframe 内 XHR 请求 */
+    ensureCurveData(cjids: number[]): void {
       const missing = cjids.filter((id) => !this.hasCjid(id));
-      await Promise.all(missing.map((cjid) => this.fetchByCjid(cjid)));
+      if (missing.length === 0) return;
+      missing.forEach((cjid) => this.loadingCjids.add(cjid));
+      if (typeof window !== 'undefined') {
+        window.postMessage(
+          { type: EXECUTION_TYPE.REQUEST_JYSB_CURVE, cjids: missing },
+          '*'
+        );
+      } else {
+        missing.forEach((cjid) => this.loadingCjids.delete(cjid));
+      }
     },
 
     setRefCurve(points: number[] | null) {

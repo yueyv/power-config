@@ -15,6 +15,7 @@ import {
 } from '@/model/sellData';
 import { getTimeLeftMs } from '@/utils/tradePriority';
 import { ElMessageBox } from 'element-plus';
+import { useTradeCurveStore } from '@/stores/tradeCurve';
 
 /** 按挂牌价格 + 倒计时排序（与 TradeViewer 选中后顺序一致）：价格升序，同价则无倒计时在前、再按剩余时间升序 */
 function sortChoiceItemsByPriceAndCountdown(
@@ -139,6 +140,15 @@ export function useBackgroundConnection(options?: UseBackgroundConnectionOptions
         }
         logInfo('content', '获取挂牌数据成功', sellData.value);
         setSellData(sellData.value);
+        break;
+      case EXECUTION_TYPE.JYSB_CURVE_RESULT:
+        {
+          const cjid = event.data?.cjid;
+          const data = event.data?.data;
+          if (typeof cjid === 'number' && Array.isArray(data)) {
+            useTradeCurveStore().setCurveData(cjid, data);
+          }
+        }
         break;
       case EXECUTION_TYPE.NEXT_CHOICE: {
         const parsed = safeJsonParse(raw) as { id: number; elecVolume: number } | null;
