@@ -51,6 +51,9 @@ export const SELL_DATA_STATUS_KEY = 'sellDataStatus';
 
 export const TRADE_ELECTRICITY_VOLUME_KEY = 'tradeElectricityVolume';
 
+/** 曲线拟合参考曲线（24 点）持久化 key */
+export const REF_CURVE_KEY = 'tradeRefCurve';
+
 export enum TRADE_STATUS {
   DISPLAY = 'display',
   TRADE = 'trade',

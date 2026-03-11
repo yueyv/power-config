@@ -16,6 +16,22 @@ import {
 import { getTimeLeftMs } from '@/utils/tradePriority';
 import { ElMessageBox } from 'element-plus';
 import { useTradeCurveStore } from '@/stores/tradeCurve';
+import { computeFitCorrelation, getFitLevel } from '@/utils/curveFit';
+
+/** 根据参考曲线与交易曲线计算拟合等级，用于日志中记录匹配度 */
+function getTradeFitLevel(gpid: number): 'high' | 'medium' | 'low' | null {
+  const store = useTradeCurveStore();
+  const ref = store.refCurve;
+  if (!ref?.length) return null;
+  const dayList = store.getByCjid(gpid);
+  const corr = computeFitCorrelation(ref, dayList);
+  if (corr === null) return null;
+  const level = getFitLevel(corr);
+  if (level === 'high') return 'high';
+  if (level === 'medium') return 'medium';
+  if (level === 'low') return 'low';
+  return null;
+}
 
 /** 按挂牌价格 + 倒计时排序（与 TradeViewer 选中后顺序一致）：价格升序，同价则无倒计时在前、再按剩余时间升序 */
 function sortChoiceItemsByPriceAndCountdown(
@@ -154,7 +170,8 @@ export function useBackgroundConnection(options?: UseBackgroundConnectionOptions
         const parsed = safeJsonParse(raw) as { id: number; elecVolume: number } | null;
         if (!parsed) break;
         const choiceSellData: CHOICE_SELL_DATA = await updateTradeData(parsed);
-        logInfo('content', '完成选择', event.data.message);
+        const fitLevel = getTradeFitLevel(parsed.id);
+        logInfo('content', '完成选择', { ...parsed, fitLevel });
         // const proceed = await ElMessageBox.confirm('确定 继续交易吗？', '提示', {
         //   confirmButtonText: '确定',
         //   cancelButtonText: '取消',
@@ -176,9 +193,10 @@ export function useBackgroundConnection(options?: UseBackgroundConnectionOptions
         {
           const parsed = safeJsonParse(raw) as { id: number; elecVolume: number } | null;
           if (parsed) updateTradeData(parsed);
+          const fitLevel = parsed ? getTradeFitLevel(parsed.id) : null;
+          logInfo('content', '交易结束', parsed ? { ...parsed, fitLevel } : undefined);
         }
         setSellDataStatus(tradeStatus.value);
-        logInfo('content', '交易结束');
         break;
       case EXECUTION_TYPE.SLIDER_POSITION_REQUEST: {
         const parsed = safeJsonParse(raw) as {

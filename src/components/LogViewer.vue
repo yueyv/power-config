@@ -37,11 +37,12 @@ import 'element-plus/theme-chalk/el-button.css';
 import 'element-plus/theme-chalk/el-message.css';
 import 'element-plus/theme-chalk/el-message-box.css';
 import 'element-plus/theme-chalk/el-dialog.css';
+import 'element-plus/theme-chalk/el-tag.css';
 import 'element-plus/theme-chalk/el-table-v2.css';
 import { clearLogs, getLogs } from '@/model/log';
 import { onMounted, onUnmounted, ref, h } from 'vue';
 import dayjs from 'dayjs';
-import { ElButton, ElMessageBox, ElTooltip } from 'element-plus';
+import { ElButton, ElMessageBox, ElTag, ElTooltip } from 'element-plus';
 import { LOGGER_NAME } from '@/constants';
 
 const tableData = ref<any>([]);
@@ -117,6 +118,23 @@ const columns = ref<any>([
         );
       }
       return h('span', { class: 'log-data', title: String(rowData.data) }, String(rowData.data));
+    },
+  },
+  {
+    key: 'fitLevel',
+    title: '匹配度',
+    width: 88,
+    align: 'center',
+    cellRenderer: ({ rowData }: { rowData: LogEntry }) => {
+      const fit = (rowData.data && typeof rowData.data === 'object' && rowData.data.fitLevel) as
+        | 'high'
+        | 'medium'
+        | 'low'
+        | undefined;
+      if (fit === 'high') return h(ElTag, { type: 'success', size: 'small', effect: 'light' }, () => '高');
+      if (fit === 'medium') return h(ElTag, { type: 'warning', size: 'small', effect: 'light' }, () => '中');
+      if (fit === 'low') return h(ElTag, { type: 'danger', size: 'small', effect: 'light' }, () => '低');
+      return h('span', { class: 'no-data' }, '—');
     },
   },
 ]);

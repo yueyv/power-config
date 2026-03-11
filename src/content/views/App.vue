@@ -170,6 +170,7 @@ const handleContinue = () => {
 };
 onMounted(() => {
   initIframe();
+  void tradeCurveStore.initRefCurveFromStorage();
 });
 </script>
 <style scoped lang="scss">

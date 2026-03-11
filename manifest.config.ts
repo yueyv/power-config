@@ -5,7 +5,10 @@ export default defineManifest({
   manifest_version: 3,
   name: pkg.name,
   version: pkg.version,
-  host_permissions: ['<all_urls>'],
+  host_permissions: [
+    'https://pmos.sd.sgcc.com.cn:18080/*',
+    'https://*.energy.cloud/*',
+  ],
   icons: {
     48: 'public/logo.png',
   },
