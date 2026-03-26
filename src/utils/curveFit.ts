@@ -1,5 +1,3 @@
-import type { TradeCurveDayItem } from '@/types';
-
 const H_KEYS = [
   'h0',
   'h1',

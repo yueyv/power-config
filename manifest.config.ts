@@ -8,6 +8,7 @@ export default defineManifest({
   host_permissions: [
     'https://pmos.sd.sgcc.com.cn:18080/*',
     'https://*.energy.cloud/*',
+    'http://127.0.0.1:8080/*',
   ],
   icons: {
     48: 'public/logo.png',

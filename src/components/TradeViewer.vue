@@ -126,8 +126,6 @@ import { useTradeCurveStore } from '@/stores/tradeCurve';
 import { correlation, curveFromDay, computeFitCorrelation, getFitLevel } from '@/utils/curveFit';
 import CurveFitDialog from '@/components/CurveFitDialog.vue';
 
-import type { CHOICE_SELL_DATA, SELL_DATA_ITEM } from '@/types';
-
 const emits = defineEmits(['trade', 'cancel', 'reset', 'continue']);
 const props = defineProps<{
   diaelecHeight?: number;

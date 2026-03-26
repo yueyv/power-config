@@ -226,11 +226,9 @@ export class TradeExecution {
   private injectCurveFetchScript(): void {
     const doc = this.iframeDocument;
     if (!doc?.body) return;
-    const URL =
-      'https://pmos.sd.sgcc.com.cn:18080/zcq/scgpjy/jysb.do?method=querydatabale';
+    const URL = 'https://pmos.sd.sgcc.com.cn:18080/zcq/scgpjy/jysb.do?method=querydatabale';
     const script = doc.createElement('script');
-    script.textContent =
-      `(function(){var U="${URL}";function token(){var e=document.querySelector('meta[name="csrf-token"]')||document.querySelector('meta[name="X-CSRF-TOKEN"]')||document.querySelector('meta[name="_csrf"]');if(e&&e.getAttribute('content'))return e.getAttribute('content');var c=document.cookie||'';var m=c.match(/X-CSRF-TOKEN=([^;]+)/);if(m)return decodeURIComponent(m[1]);m=c.match(/csrf[_-]?token=([^;]+)/i);if(m)return decodeURIComponent(m[1]);return null;}function fetchOne(cjid,cb){var x=new XMLHttpRequest();x.open('POST',U,true);x.setRequestHeader('Content-Type','application/x-www-form-urlencoded; charset=UTF-8');x.setRequestHeader('Accept','application/json, text/javascript, */*; q=0.01');x.setRequestHeader('X-Requested-With','XMLHttpRequest');var t=token();if(t)x.setRequestHeader('X-CSRF-TOKEN',t);x.withCredentials=true;x.onreadystatechange=function(){if(x.readyState!==4)return;var d=[];if(x.status>=200&&x.status<300){try{var p=JSON.parse(x.responseText);d=Array.isArray(p)?p:p&&p.data?p.data:[];}catch(e){}}try{window.parent.postMessage({type:'jysb_curve_result',cjid:cjid,data:d},'*');}catch(e){}if(cb)cb();};x.onerror=function(){try{window.parent.postMessage({type:'jysb_curve_result',cjid:cjid,data:[]},'*');}catch(e){}if(cb)cb();};x.send('cjid='+cjid);}window.addEventListener('message',function(ev){if(!ev.data||ev.data.type!=='fetch_jysb_curve')return;var c=ev.data.cjids;if(!Array.isArray(c)||c.length===0)return;c.forEach(function(id){fetchOne(id);});});})();`;
+    script.textContent = `(function(){var U="${URL}";function token(){var e=document.querySelector('meta[name="csrf-token"]')||document.querySelector('meta[name="X-CSRF-TOKEN"]')||document.querySelector('meta[name="_csrf"]');if(e&&e.getAttribute('content'))return e.getAttribute('content');var c=document.cookie||'';var m=c.match(/X-CSRF-TOKEN=([^;]+)/);if(m)return decodeURIComponent(m[1]);m=c.match(/csrf[_-]?token=([^;]+)/i);if(m)return decodeURIComponent(m[1]);return null;}function fetchOne(cjid,cb){var x=new XMLHttpRequest();x.open('POST',U,true);x.setRequestHeader('Content-Type','application/x-www-form-urlencoded; charset=UTF-8');x.setRequestHeader('Accept','application/json, text/javascript, */*; q=0.01');x.setRequestHeader('X-Requested-With','XMLHttpRequest');var t=token();if(t)x.setRequestHeader('X-CSRF-TOKEN',t);x.withCredentials=true;x.onreadystatechange=function(){if(x.readyState!==4)return;var d=[];if(x.status>=200&&x.status<300){try{var p=JSON.parse(x.responseText);d=Array.isArray(p)?p:p&&p.data?p.data:[];}catch(e){}}try{window.parent.postMessage({type:'jysb_curve_result',cjid:cjid,data:d},'*');}catch(e){}if(cb)cb();};x.onerror=function(){try{window.parent.postMessage({type:'jysb_curve_result',cjid:cjid,data:[]},'*');}catch(e){}if(cb)cb();};x.send('cjid='+cjid);}window.addEventListener('message',function(ev){if(!ev.data||ev.data.type!=='fetch_jysb_curve')return;var c=ev.data.cjids;if(!Array.isArray(c)||c.length===0)return;c.forEach(function(id){fetchOne(id);});});})();`;
     try {
       doc.body.appendChild(script);
     } catch (e) {
@@ -332,8 +330,11 @@ export class TradeExecution {
     return rows;
   }
 
-  cancelTrade(): void {
+  async cancelTrade(): Promise<void> {
     this.isTrade = false;
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    const input = this.iframeDocument?.getElementById('zpdl') as HTMLInputElement;
+    input.readOnly = false;
   }
 
   setChoiceAndTrade(choiceSellData: CHOICE_SELL_DATA): void {
@@ -344,7 +345,7 @@ export class TradeExecution {
   }
 
   private async updateChoice(currentChoiceElement: HTMLTableRowElement | null): Promise<void> {
-    await new Promise((resolve) => setTimeout(resolve, 2000));
+    await new Promise((resolve) => setTimeout(resolve, 1000));
     if (!this.isTrade) return;
 
     let clickSuccess = false;
@@ -362,7 +363,8 @@ export class TradeExecution {
 
     await new Promise((resolve) => setTimeout(resolve, 300));
     const input = this.iframeDocument?.getElementById('zpdl') as HTMLInputElement;
-    await new Promise((resolve) => setTimeout(resolve, 1200));
+    input.readOnly = true;
+    await new Promise((resolve) => setTimeout(resolve, 500));
 
     if (input && this.currentChoice.elecVolume > 0) {
       const inputSuccess = simulateInput(input, this.currentChoice.elecVolume);
